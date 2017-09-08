@@ -16,9 +16,28 @@ inline bool es_pared(int tipo) {
     return true;
 }
 
-class Bolitas_Especiales {
-    int bolita_esp_x;
-    int bolita_esp_y;
+class Bolita_Especial {
+    int x;
+    int y;
+
+    sf::Sprite sprite;
+    sf::Texture* texture;
+
+    sf::RenderWindow* window;
+
+public:
+	//Constructor
+	Bolita_Especial(sf::RenderWindow* window_param, sf::Texture* texture_param) {
+		texture = texture_param;
+		window = window_param;
+
+		sprite.setTexture(*texture);
+	}
+
+	void setposition(int x_param, int y_param) {
+		x = x_param;
+		y = y_param;
+	}
 };
 
 class Pacman {
@@ -57,13 +76,24 @@ class Pacman {
 
     sf::RenderWindow* window;
 
-    void grab_pellet() {
-        score_player += 100;
+    void pickup() {
+    	switch(mapa_matriz[mapa_x][mapa_y]) {
+		case 30: // Bolita comun
+			mapa_matriz[mapa_x][mapa_y] = 0;
+			score_player += 100;
+			break;
+
+		case 28: // Bolitas especiales
+		case 29:
+			mapa_matriz[mapa_x][mapa_y] = 0;
+			score_player += 400;
+			break;
+    	}
     }
 
 public:
 
-    // Puntuaje
+    // Puntaje
     int score_player;
 
     // Constructor
@@ -216,10 +246,7 @@ public:
                         break;
                 }
 
-                if (mapa_matriz[mapa_x][mapa_y] == 30) {
-                    mapa_matriz[mapa_x][mapa_y] = 0;
-                    grab_pellet();
-                }
+                pickup();
             }
 
             sprite.setRotation(direction*90);
@@ -243,6 +270,9 @@ class Mapa {
 	sf::Sprite sprite_paredes;
 
 	sf::RenderWindow* window;
+
+	vector<int> bol_especiales;
+	int bol_anim;
 
 	// Dibujar una sola pared
 	void dibujar_pared(int x, int y, int tipo) {
@@ -279,6 +309,8 @@ class Mapa {
 		pac_spawn_x = 1;
 		pac_spawn_y = 1;
 
+		bol_anim = 0;
+
 		mapa_pos = new int*[tam_x];
 		for (int i = 0; i < tam_x; i++) {
 			mapa_pos[i] = new int[tam_y];
@@ -292,13 +324,24 @@ class Mapa {
             while(getline(mapfile, sub_line, ',')) {
                 int pos = atoi(sub_line.c_str());
 
-                if (pos == 69) {
-                    pac_spawn_x = i;
+                switch(pos) {
+				case 28:
+				case 29:
+					mapa_pos[i][j] = pos;
+					bol_especiales.push_back(i + j * tam_x);
+					break;
+
+				case 69:
+					pac_spawn_x = i;
                     pac_spawn_y = j;
                     mapa_pos[i][j] = 0;
-                } else {
-                    mapa_pos[i][j] = pos;
+					break;
+
+				default:
+					mapa_pos[i][j] = pos;
+					break;
                 }
+
                 i++;
                 if(i == tam_x) {
                     i = 0;
@@ -321,6 +364,21 @@ class Mapa {
 		for (int i = 0; i < tam_x; i++) {
 			for (int j = 0; j < tam_y; j++) {
 				dibujar_pared(i, j, mapa_pos[i][j]);
+			}
+		}
+
+		if (bol_anim++ == 5) {
+			bol_anim = 0;
+
+
+			for(int i = 0; i < bol_especiales.size(); i++) {
+				int pos = mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x];
+
+				if (pos == 28) {
+					mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x] = 29;
+				} else if (pos == 29) {
+					mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x] = 28;
+				}
 			}
 		}
 	}
@@ -354,6 +412,7 @@ int main()
     Pacman player(&window, &charset_texture, obj_mapa.mapa_pos);
     player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
 
+    // Posicion de dibujado
     setDrawOffset(&player, &obj_mapa, 320, 40);
 
     sf::Font font_score;
