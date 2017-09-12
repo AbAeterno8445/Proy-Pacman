@@ -16,28 +16,8 @@ inline bool es_pared(int tipo) {
     return true;
 }
 
-class Bolita_Especial {
-    int x;
-    int y;
+class Dibujable {
 
-    sf::Sprite sprite;
-    sf::Texture* texture;
-
-    sf::RenderWindow* window;
-
-public:
-	//Constructor
-	Bolita_Especial(sf::RenderWindow* window_param, sf::Texture* texture_param) {
-		texture = texture_param;
-		window = window_param;
-
-		sprite.setTexture(*texture);
-	}
-
-	void setposition(int x_param, int y_param) {
-		x = x_param;
-		y = y_param;
-	}
 };
 
 class Pacman {
@@ -110,7 +90,7 @@ public:
         sprite.setScale(2, 2);
         sprite.setOrigin(sf::Vector2f(8, 8));
 
-        sprite_id = 0;
+        sprite_id = 2;
         sprite_animstate = 0;
 
         anim_current = 0;
@@ -121,7 +101,7 @@ public:
         direction = 0;
         speed = 1.7;
 
-        moving = true;
+        moving = false;
         move_drawoffx = 0;
         move_drawoffy = 0;
 
@@ -257,6 +237,10 @@ public:
         mapa_x = x;
         mapa_y = y;
     }
+
+    void start() {
+        moving = true;
+    }
 };
 
 class Mapa {
@@ -367,7 +351,7 @@ class Mapa {
 			}
 		}
 
-		if (bol_anim++ == 5) {
+		if (bol_anim++ == 3) {
 			bol_anim = 0;
 
 
@@ -393,6 +377,11 @@ void setDrawOffset(Pacman* pacman, Mapa* mapa, int xoff, int yoff) {
 
 int main()
 {
+    // Variables
+
+    int i=0;
+    bool began = false;
+
 	// Inicializacion de ventana
 
     sf::RenderWindow window(sf::VideoMode(1280, 720), "PACMAN PRO");
@@ -429,7 +418,7 @@ int main()
             if (event.type == sf::Event::Closed)
                 window.close();
 
-            if (event.type == sf::Event::KeyPressed)
+            if (event.type == sf::Event::KeyPressed && began)
                 switch(event.key.code) {
                 case sf::Keyboard::W:
                     player.rotar(3);
@@ -462,6 +451,11 @@ int main()
         window.draw(text_score);
 
         window.display();
+
+        if (i++>=240 && !began) {
+            player.start();
+            began = true;
+        }
     }
 
     return 0;
