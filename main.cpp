@@ -17,12 +17,21 @@ inline bool es_pared(int tipo) {
 }
 
 class Dibujable {
+protected:
+    sf::Texture* texture_pt;
+    sf::Sprite sprite;
 
-};
+    sf::RenderWindow* window;
 
-class Pacman {
+    // Posicion en el mapa
+    int mapa_x;
+    int mapa_y;
 
-    //El numero del pacman es el 69
+    // Posicion de dibujado
+    float draw_x;
+    float draw_y;
+    float draw_xoff;
+    float draw_yoff;
 
     int sprite_id;
     int sprite_animstate;
@@ -30,94 +39,61 @@ class Pacman {
     int direction;
     float speed;
 
+    int move_queue;
+
     int anim_current;
-    int anim_movement[4] = { 0, 1, 2, 1 };
+    int* anim_movement;
+    int anim_frames;
+
 
     bool moving;
     float move_drawoffx;
     float move_drawoffy;
 
-    int move_queue;
-
-	// Posicion de dibujado
-    float draw_x;
-    float draw_y;
-    float draw_xoff;
-    float draw_yoff;
-
-    // Posicion en el mapa
-    int mapa_x;
-    int mapa_y;
+    int anim_speed;
 
     int** mapa_matriz;
 
-    sf::Texture* texture_pt;
-    sf::Sprite sprite;
-
-    sf::RenderWindow* window;
-
-    void pickup() {
-    	switch(mapa_matriz[mapa_x][mapa_y]) {
-		case 30: // Bolita comun
-			mapa_matriz[mapa_x][mapa_y] = 0;
-			score_player += 100;
-			break;
-
-		case 28: // Bolitas especiales
-		case 29:
-			mapa_matriz[mapa_x][mapa_y] = 0;
-			score_player += 400;
-			break;
-    	}
-    }
+    virtual void dib_pickup() {};
 
 public:
+    //Constructor
 
-    // Puntaje
-    int score_player;
-
-    // Constructor
-    Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, int** mapa_matriz_param) {
-
-    	window = window_param;
-
-    	score_player = 0;
-
-    	mapa_matriz = mapa_matriz_param;
-
+    Dibujable(sf::RenderWindow* window_param, sf::Texture* texture_param, int** mapa_matriz_param) {
+        window = window_param;
         texture_pt = texture_param;
+
+        mapa_matriz = mapa_matriz_param;
+
         sprite.setTexture(*texture_pt);
-        sprite.setScale(2, 2);
-        sprite.setOrigin(sf::Vector2f(8, 8));
 
-        sprite_id = 2;
-        sprite_animstate = 0;
-
-        anim_current = 0;
-
-        mapa_x = 1;
-        mapa_y = 1;
-
-        direction = 0;
-        speed = 1.7;
-
-        moving = false;
         move_drawoffx = 0;
         move_drawoffy = 0;
+
+        sprite_animstate = 0;
+        anim_current = 0;
+        anim_speed = 3;
+
+        sprite.setScale(2, 2);
+        sprite.setOrigin(sf::Vector2f(8, 8));
 
         move_queue = 0;
     }
 
+    ~Dibujable() {
+        delete[] anim_movement;
+    }
+
     void dibujar() {
 
-        if (sprite_animstate++ == 3) {
+        if (sprite_animstate++ == anim_speed) {
             sprite_animstate = 0;
 
             if (moving) {
                 sprite_id = anim_movement[anim_current];
                 anim_current++;
 
-                if (anim_current == 4) {
+                if (anim_current == anim_frames) {
                     anim_current = 0;
                 }
             }
@@ -132,21 +108,7 @@ public:
 		window->draw(sprite);
     }
 
-    void set_drawoffset(int xoff_param, int yoff_param) {
-        draw_xoff = xoff_param;
-        draw_yoff = yoff_param;
-    }
-
-    void rotar(int dir) {
-        move_queue = dir;
-
-        if (!moving) {
-            direction = dir;
-            moving = true;
-        }
-    }
-
-    void mover() {
+    void dib_mover() {
         if (moving) {
             int draw_pos_x = draw_x - draw_xoff;
             int draw_pos_y = draw_y - draw_yoff;
@@ -225,20 +187,109 @@ public:
                     case 3: if (!es_pared(mapa_matriz[mapa_x][mapa_y - 1])) direction = move_queue;
                         break;
                 }
-
-                pickup();
+                dib_pickup();
             }
-
-            sprite.setRotation(direction*90);
         }
+    }
+
+    void set_drawoffset(int xoff_param, int yoff_param) {
+        draw_xoff = xoff_param;
+        draw_yoff = yoff_param;
     }
 
     void setposition(int x, int y) {
         mapa_x = x;
         mapa_y = y;
     }
+};
+
+class Pacman: public Dibujable {
+
+    //El numero del pacman es el 69
+
+    void dib_pickup() {
+    	switch(mapa_matriz[mapa_x][mapa_y]) {
+		case 30: // Bolita comun
+			mapa_matriz[mapa_x][mapa_y] = 0;
+			score_player += 100;
+			break;
+
+		case 28: // Bolitas especiales
+		case 29:
+			mapa_matriz[mapa_x][mapa_y] = 0;
+			score_player += 400;
+			break;
+    	}
+    }
+
+public:
+
+    // Puntaje
+    int score_player;
+
+    Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, int** mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
+
+    	score_player = 0;
+
+        sprite_id = 2;
+
+        mapa_x = 1;
+        mapa_y = 1;
+
+        direction = 0;
+        speed = 1.7;
+
+        anim_frames = 4;
+        anim_movement = new int[anim_frames];
+
+        anim_movement[0] = 0;
+        anim_movement[1] = 1;
+        anim_movement[2] = 2;
+        anim_movement[3] = 1;
+
+        moving = false;
+    }
+
+    void mover() {
+        dib_mover();
+        sprite.setRotation(direction * 90);
+    }
+
+    void rotar(int dir) {
+        move_queue = dir;
+
+        if (!moving) {
+            direction = dir;
+            moving = true;
+        }
+    }
 
     void start() {
+        moving = true;
+    }
+};
+
+class Fantasmita : public Dibujable {
+
+    //404 es el numero del fantasma rojo
+
+    void dib_pickup() {
+
+    }
+
+public:
+    // Constructor
+    Fantasmita(sf::RenderWindow* window_param, sf::Texture* texture_param, int** mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
+
+        anim_frames = 2;
+        anim_movement = new int[anim_frames];
+        anim_speed = 10;
+
+        anim_movement[0] = 0;
+        anim_movement[1] = 1;
+
+        speed = 1.5;
+        direction = 0;
         moving = true;
     }
 };
@@ -354,8 +405,7 @@ class Mapa {
 		if (bol_anim++ == 3) {
 			bol_anim = 0;
 
-
-			for(int i = 0; i < bol_especiales.size(); i++) {
+			for(unsigned int i = 0; i < bol_especiales.size(); i++) {
 				int pos = mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x];
 
 				if (pos == 28) {
@@ -370,9 +420,10 @@ class Mapa {
 
 /** FUNCIONES **/
 
-void setDrawOffset(Pacman* pacman, Mapa* mapa, int xoff, int yoff) {
+void setDrawOffset(Pacman* pacman, Fantasmita* fantasma, Mapa* mapa, int xoff, int yoff) {
     pacman->set_drawoffset(xoff, yoff);
     mapa->set_drawoffset(xoff, yoff);
+    fantasma->set_drawoffset(xoff, yoff);
 };
 
 int main()
@@ -396,13 +447,23 @@ int main()
     sf::Texture charset_texture;
     charset_texture.loadFromFile("assets/charset.png");
 
+    // Textura fantasmas
+
+    sf::Texture ghosts_texture;
+    ghosts_texture.loadFromFile("assets/charset_fantasmas.png");
+
     // Objeto pacman (jugador)
 
     Pacman player(&window, &charset_texture, obj_mapa.mapa_pos);
     player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
 
+    // Fantasmas
+
+    Fantasmita ghost(&window, &ghosts_texture, obj_mapa.mapa_pos);
+    ghost.setposition(1, 1);
+
     // Posicion de dibujado
-    setDrawOffset(&player, &obj_mapa, 320, 40);
+    setDrawOffset(&player, &ghost, &obj_mapa, 320, 40);
 
     sf::Font font_score;
     font_score.loadFromFile("assets/fonts/monobit.ttf");
@@ -446,6 +507,9 @@ int main()
         obj_mapa.dibujar_mapa();
         player.dibujar();
         player.mover();
+
+        ghost.dibujar();
+        ghost.dib_mover();
 
         text_score.setString("Score: " + to_string(player.score_player));
         window.draw(text_score);
