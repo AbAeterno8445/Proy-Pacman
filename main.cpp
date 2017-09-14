@@ -54,7 +54,8 @@ protected:
 
     int** mapa_matriz;
 
-    virtual void dib_pickup() {};
+    virtual void reach_block() {};
+    virtual void ghost_corner() {};
 
 public:
     //Constructor
@@ -127,6 +128,7 @@ public:
                     }
                 } else {
                     moving = false;
+                    ghost_corner();
                 }
                 break;
 
@@ -141,6 +143,7 @@ public:
                     }
                 } else {
                     moving = false;
+                    ghost_corner();
                 }
                 break;
 
@@ -155,6 +158,7 @@ public:
                     }
                 } else {
                     moving = false;
+                    ghost_corner();
                 }
                 break;
 
@@ -169,6 +173,7 @@ public:
                     }
                 } else {
                     moving = false;
+                    ghost_corner();
                 }
                 break;
             }
@@ -187,7 +192,7 @@ public:
                     case 3: if (!es_pared(mapa_matriz[mapa_x][mapa_y - 1])) direction = move_queue;
                         break;
                 }
-                dib_pickup();
+                reach_block();
             }
         }
     }
@@ -207,7 +212,7 @@ class Pacman: public Dibujable {
 
     //El numero del pacman es el 69
 
-    void dib_pickup() {
+    void reach_block() {
     	switch(mapa_matriz[mapa_x][mapa_y]) {
 		case 30: // Bolita comun
 			mapa_matriz[mapa_x][mapa_y] = 0;
@@ -273,24 +278,132 @@ class Fantasmita : public Dibujable {
 
     //404 es el numero del fantasma rojo
 
-    void dib_pickup() {
+    int blocks_passed;
 
+    bool corner = false;
+
+    void update_dir_anim() {
+		switch(direction) {
+		case 0: // Derecha
+			anim_movement[0] = 0;
+			anim_movement[1] = 1;
+			break;
+
+		case 1: // Abajo
+			anim_movement[0] = 6;
+			anim_movement[1] = 7;
+			break;
+
+		case 2: // Izquierda
+			anim_movement[0] = 2;
+			anim_movement[1] = 3;
+			break;
+
+		case 3: // Arriba
+			anim_movement[0] = 4;
+			anim_movement[1] = 5;
+			break;
+		}
+    }
+
+    void move_dir_random(int behind) {
+
+    	vector<int> dirs;
+
+		for (int i = 0; i < 4; i++) {
+			if (i != behind) {
+				int xx = 0, yy = 0;
+
+				switch(i) {
+					case 0: xx = 1; break;
+					case 1: yy = 1; break;
+					case 2: xx = -1; break;
+					case 3: yy = -1; break;
+				}
+				if (!es_pared(mapa_matriz[mapa_x + xx][mapa_y + yy])) {
+					dirs.push_back(i);
+				}
+			}
+		}
+
+		if (dirs.size() > 0) {
+			direction = move_queue = dirs[random(0, dirs.size() - 1)];
+		} else {
+			direction = move_queue = behind;
+		}
+		moving = true;
+		update_dir_anim();
+    }
+
+    void ghost_corner() {
+    	corner = true;
+		reach_block();
+    }
+
+    void reach_block() {
+    	blocks_passed++;
+
+    	// Si existe la posibilidad de cambiar de eje de movimiento, aumentar la chance
+		switch(direction) {
+		case 0: // Horizontal
+		case 2:
+			if (!es_pared(mapa_matriz[mapa_x][mapa_y + 1]) || !es_pared(mapa_matriz[mapa_x][mapa_y - 1])) {
+				blocks_passed += 3;
+			}
+			break;
+
+		case 1: // Vertical
+		case 3:
+			if (!es_pared(mapa_matriz[mapa_x + 1][mapa_y]) || !es_pared(mapa_matriz[mapa_x - 1][mapa_y])) {
+				blocks_passed += 3;
+			}
+			break;
+		}
+
+    	if ((blocks_passed > 3 && !random(0, max(10 - blocks_passed, 1))) || corner) {
+			int behind_dir = 0;
+			blocks_passed = 0;
+			corner = false;
+
+			switch(direction) {
+			case 0: // Derecha
+				behind_dir = 2;
+				break;
+
+			case 1: // Abajo
+				behind_dir = 3;
+				break;
+
+			case 2: // Izquierda
+				behind_dir = 0;
+				break;
+
+			case 3: // Arriba
+				behind_dir = 1;
+				break;
+			}
+
+			move_dir_random(behind_dir);
+    	}
     }
 
 public:
     // Constructor
     Fantasmita(sf::RenderWindow* window_param, sf::Texture* texture_param, int** mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
 
+		blocks_passed = 0;
+
         anim_frames = 2;
         anim_movement = new int[anim_frames];
         anim_speed = 10;
+
+        sprite_id = 0;
 
         anim_movement[0] = 0;
         anim_movement[1] = 1;
 
         speed = 1.5;
         direction = 0;
-        moving = true;
     }
 };
 
@@ -353,9 +466,18 @@ class Mapa {
 
 		fstream mapfile;
 		mapfile.open("mapas/mapa1.txt");
+
 		if (mapfile.is_open()) {
             string sub_line;
             int i = 0, j = 0;
+
+            string tam_x_str, tam_y_str;
+            getline(mapfile, tam_x_str);
+            getline(mapfile, tam_y_str);
+
+            tam_x = atoi(tam_x_str.c_str());
+            tam_y = atoi(tam_y_str.c_str());
+
             while(getline(mapfile, sub_line, ',')) {
                 int pos = atoi(sub_line.c_str());
 
@@ -460,7 +582,7 @@ int main()
     // Fantasmas
 
     Fantasmita ghost(&window, &ghosts_texture, obj_mapa.mapa_pos);
-    ghost.setposition(1, 1);
+    ghost.setposition(10, 9);
 
     // Posicion de dibujado
     setDrawOffset(&player, &ghost, &obj_mapa, 320, 40);
