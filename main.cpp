@@ -36,15 +36,16 @@ protected:
     int sprite_id;
     int sprite_animstate;
 
+    int sprite_columns;
+
     int direction;
     float speed;
 
     int move_queue;
 
     int anim_current;
-    int* anim_movement;
+    int anim_movement[4];
     int anim_frames;
-
 
     bool moving;
     float move_drawoffx;
@@ -72,6 +73,7 @@ public:
         move_drawoffy = 0;
 
         sprite_animstate = 0;
+        sprite_columns = 14;
         anim_current = 0;
         anim_speed = 3;
 
@@ -81,9 +83,7 @@ public:
         move_queue = 0;
     }
 
-    ~Dibujable() {
-        delete[] anim_movement;
-    }
+    virtual ~Dibujable() {}
 
     void dibujar() {
 
@@ -100,7 +100,7 @@ public:
             }
         }
 
-		sprite.setTextureRect(sf::IntRect((sprite_id % 14) * 16, floor(sprite_id / 14) * 16, 16, 16));
+		sprite.setTextureRect(sf::IntRect((sprite_id % sprite_columns) * 16, floor(sprite_id / sprite_columns) * 16, 16, 16));
 
     	draw_x = mapa_x * 32 + 16 + move_drawoffx + draw_xoff;
     	draw_y = mapa_y * 32 + 16 + move_drawoffy + draw_yoff;
@@ -223,6 +223,7 @@ class Pacman: public Dibujable {
 		case 28:
 			mapa_matriz[mapa_x][mapa_y] = 11;
 			score_player += 400;
+			ate_special = true;
 			break;
     	}
     }
@@ -232,11 +233,16 @@ public:
     // Puntaje
     int score_player;
 
+    // Comio bolita especial
+    bool ate_special;
+
     Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, int** mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
 
     	score_player = 0;
 
         sprite_id = 2;
+
+        ate_special = false;
 
         mapa_x = 1;
         mapa_y = 1;
@@ -245,7 +251,6 @@ public:
         speed = 1.7;
 
         anim_frames = 4;
-        anim_movement = new int[anim_frames];
 
         anim_movement[0] = 0;
         anim_movement[1] = 1;
@@ -276,34 +281,47 @@ public:
 
 class Fantasmita : public Dibujable {
 
-    //404 es el numero del fantasma rojo
+	int ghost_spriteid;
 
     int blocks_passed;
 
-    bool corner = false;
+    bool corner;
+
+    bool slowed;
+    int slowed_ticks;
 
     void update_dir_anim() {
-		switch(direction) {
-		case 0: // Derecha
-			anim_movement[0] = 0;
-			anim_movement[1] = 1;
-			break;
+    	if (slowed) {
+			if (slowed_ticks > 200) {
+				anim_movement[0] = 8;
+				anim_movement[1] = 9;
+			} else {
+				anim_movement[0] = 10;
+				anim_movement[1] = 9;
+			}
+    	} else {
+			switch(direction) {
+			case 0: // Derecha
+				anim_movement[0] = ghost_spriteid;
+				anim_movement[1] = ghost_spriteid + 1;
+				break;
 
-		case 1: // Abajo
-			anim_movement[0] = 6;
-			anim_movement[1] = 7;
-			break;
+			case 1: // Abajo
+				anim_movement[0] = ghost_spriteid + 6;
+				anim_movement[1] = ghost_spriteid + 7;
+				break;
 
-		case 2: // Izquierda
-			anim_movement[0] = 2;
-			anim_movement[1] = 3;
-			break;
+			case 2: // Izquierda
+				anim_movement[0] = ghost_spriteid + 2;
+				anim_movement[1] = ghost_spriteid + 3;
+				break;
 
-		case 3: // Arriba
-			anim_movement[0] = 4;
-			anim_movement[1] = 5;
-			break;
-		}
+			case 3: // Arriba
+				anim_movement[0] = ghost_spriteid + 4;
+				anim_movement[1] = ghost_spriteid + 5;
+				break;
+			}
+    	}
     }
 
     void move_dir_random(int behind) {
@@ -348,14 +366,14 @@ class Fantasmita : public Dibujable {
 		case 0: // Horizontal
 		case 2:
 			if (!es_pared(mapa_matriz[mapa_x][mapa_y + 1]) || !es_pared(mapa_matriz[mapa_x][mapa_y - 1])) {
-				blocks_passed += 3;
+				blocks_passed += 6;
 			}
 			break;
 
 		case 1: // Vertical
 		case 3:
 			if (!es_pared(mapa_matriz[mapa_x + 1][mapa_y]) || !es_pared(mapa_matriz[mapa_x - 1][mapa_y])) {
-				blocks_passed += 3;
+				blocks_passed += 6;
 			}
 			break;
 		}
@@ -394,16 +412,55 @@ public:
 		blocks_passed = 0;
 
         anim_frames = 2;
-        anim_movement = new int[anim_frames];
         anim_speed = 10;
 
         sprite_id = 0;
+        ghost_spriteid = 0;
+
+        sprite_columns = 12;
 
         anim_movement[0] = 0;
         anim_movement[1] = 1;
 
         speed = 1.5;
         direction = 0;
+        moving = false;
+
+        corner = false;
+
+        slowed = false;
+        slowed_ticks = 0;
+    }
+
+    void set_ghost_spriteid(int id) {
+		ghost_spriteid = id;
+		sprite_id = id;
+		update_dir_anim();
+    }
+
+    void toggle_slowmode() {
+		if (!slowed) speed -= 0.5;
+
+		slowed = true;
+		slowed_ticks = 600;
+
+		update_dir_anim();
+    }
+
+    void process_slowmode() {
+		if (slowed) {
+			if (slowed_ticks > 0) {
+				slowed_ticks--;
+			} else {
+				slowed = false;
+				speed += 0.5;
+				update_dir_anim();
+			}
+		}
+    }
+
+    void start() {
+		moving = true;
     }
 };
 
@@ -460,7 +517,7 @@ class Mapa {
 		}
 
 		fstream mapfile;
-		mapfile.open("mapas/mapa1.txt");
+		mapfile.open("mapas/nivel_1.txt");
 
 		if (mapfile.is_open()) {
             string sub_line;
@@ -537,17 +594,20 @@ class Mapa {
 
 /** FUNCIONES **/
 
-void setDrawOffset(Pacman* pacman, Fantasmita* fantasma, Mapa* mapa, int xoff, int yoff) {
+void setDrawOffset(Pacman* pacman, vector<Fantasmita>& ghosts, Mapa* mapa, int xoff, int yoff) {
     pacman->set_drawoffset(xoff, yoff);
     mapa->set_drawoffset(xoff, yoff);
-    fantasma->set_drawoffset(xoff, yoff);
+
+    for (unsigned int i = 0; i < ghosts.size(); i++) {
+		ghosts[i].set_drawoffset(xoff, yoff);
+    }
 };
 
 int main()
 {
     // Variables
 
-    int i=0;
+    int ticks=0;
     bool began = false;
 
 	// Inicializacion de ventana
@@ -576,17 +636,44 @@ int main()
 
     // Fantasmas
 
-    Fantasmita ghost(&window, &ghosts_texture, obj_mapa.mapa_pos);
-    ghost.setposition(10, 9);
+    vector<Fantasmita> ghosts;
+
+    // Rojo
+    Fantasmita* ghost_temp = new Fantasmita(&window, &ghosts_texture, obj_mapa.mapa_pos);
+    ghost_temp->setposition(10, 6);
+    ghosts.push_back(*ghost_temp);
+
+    // Rosa
+    ghost_temp->setposition(11, 8);
+    ghost_temp->set_ghost_spriteid(12);
+    ghosts.push_back(*ghost_temp);
+
+    // Azul
+    ghost_temp->setposition(9, 8);
+    ghost_temp->set_ghost_spriteid(24);
+    ghosts.push_back(*ghost_temp);
+
+    // Naranja
+    ghost_temp->setposition(10, 8);
+    ghost_temp->set_ghost_spriteid(36);
+    ghosts.push_back(*ghost_temp);
+
+    delete ghost_temp;
 
     // Posicion de dibujado
-    setDrawOffset(&player, &ghost, &obj_mapa, 320, 40);
+    setDrawOffset(&player, ghosts, &obj_mapa, 320, 40);
 
-    sf::Font font_score;
-    font_score.loadFromFile("assets/fonts/monobit.ttf");
+    sf::Font font;
+    font.loadFromFile("assets/fonts/emulogic.ttf");
 
-    sf::Text text_score("", font_score, 30);
-    text_score.setPosition(sf::Vector2f(320, 0));
+    sf::Text text_score("", font, 16);
+    text_score.setPosition(sf::Vector2f(320, 16));
+
+    // Texto "Ready!"
+    sf::Text text_ready("Ready!", font, 16);
+    text_ready.setFillColor(sf::Color::Yellow);
+    text_ready.setOrigin(sf::Vector2f(text_ready.getLocalBounds().width / 2, 0));
+    text_ready.setPosition(sf::Vector2f(window.getSize().x / 2 + 16, window.getSize().y / 2 + 8));
 
     while (window.isOpen())
     {
@@ -625,18 +712,34 @@ int main()
         player.dibujar();
         player.mover();
 
-        ghost.dibujar();
-        ghost.dib_mover();
+        if (player.ate_special) {
+			player.ate_special = false;
+
+			for (unsigned int i = 0; i < ghosts.size(); i++) {
+				ghosts[i].toggle_slowmode();
+			}
+        }
+
+	 	for (unsigned int i = 0; i < ghosts.size(); i++) {
+			ghosts[i].dibujar();
+			ghosts[i].dib_mover();
+			ghosts[i].process_slowmode();
+        }
 
         text_score.setString("Score: " + to_string(player.score_player));
         window.draw(text_score);
 
-        window.display();
-
-        if (i++>=240 && !began) {
+        if (ticks++ >= 240 && !began) {
             player.start();
+            for (unsigned int i = 0; i < ghosts.size(); i++) {
+				ghosts[i].start();
+            }
             began = true;
         }
+
+        if (!began) window.draw(text_ready);
+
+        window.display();
     }
 
     return 0;
