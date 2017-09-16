@@ -10,7 +10,7 @@ using namespace std;
 #define random(A,B) (A + (rand() % (int)(B-A+1)))
 
 inline bool es_pared(int tipo) {
-    if (tipo == 0 || tipo == 18 || tipo == 19 || tipo == 28 || tipo == 29 || tipo == 30) {
+    if (tipo == 11 || tipo == 18 || tipo == 19 || tipo == 27 || tipo == 28 || tipo == 29) {
         return false;
     }
     return true;
@@ -214,14 +214,14 @@ class Pacman: public Dibujable {
 
     void reach_block() {
     	switch(mapa_matriz[mapa_x][mapa_y]) {
-		case 30: // Bolita comun
-			mapa_matriz[mapa_x][mapa_y] = 0;
+		case 29: // Bolita comun
+			mapa_matriz[mapa_x][mapa_y] = 11;
 			score_player += 100;
 			break;
 
-		case 28: // Bolitas especiales
-		case 29:
-			mapa_matriz[mapa_x][mapa_y] = 0;
+		case 27: // Bolitas especiales
+		case 28:
+			mapa_matriz[mapa_x][mapa_y] = 11;
 			score_player += 400;
 			break;
     	}
@@ -424,12 +424,7 @@ class Mapa {
 
 	// Dibujar una sola pared
 	void dibujar_pared(int x, int y, int tipo) {
-	    if (tipo == 0) {
-            sprite_paredes.setTextureRect(sf::IntRect(32, 32, 32, 32));
-	    } else {
-            tipo--;
-            sprite_paredes.setTextureRect(sf::IntRect(32 * (tipo % 10), 32 * floor(tipo / 10), 32, 32));
-	    }
+		sprite_paredes.setTextureRect(sf::IntRect(32 * (tipo % 10), 32 * floor(tipo / 10), 32, 32));
 
 		sprite_paredes.setPosition(sf::Vector2f(x * 32 + draw_xoff, y * 32 + draw_yoff));
 
@@ -482,16 +477,16 @@ class Mapa {
                 int pos = atoi(sub_line.c_str());
 
                 switch(pos) {
+				case 27: // Bolitas especiales
 				case 28:
-				case 29:
 					mapa_pos[i][j] = pos;
 					bol_especiales.push_back(i + j * tam_x);
 					break;
 
-				case 69:
+				case 30: // Posicion inicial pacman
 					pac_spawn_x = i;
                     pac_spawn_y = j;
-                    mapa_pos[i][j] = 0;
+                    mapa_pos[i][j] = 11;
 					break;
 
 				default:
@@ -530,10 +525,10 @@ class Mapa {
 			for(unsigned int i = 0; i < bol_especiales.size(); i++) {
 				int pos = mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x];
 
-				if (pos == 28) {
-					mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x] = 29;
-				} else if (pos == 29) {
+				if (pos == 27) {
 					mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x] = 28;
+				} else if (pos == 28) {
+					mapa_pos[bol_especiales[i] % tam_x][(bol_especiales[i] - bol_especiales[i] % tam_x) / tam_x] = 27;
 				}
 			}
 		}
