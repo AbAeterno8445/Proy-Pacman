@@ -224,13 +224,19 @@ public:
         mapa_y = y;
     }
 
+    int getposition_x() { return mapa_x; }
+    int getposition_y() { return mapa_y; }
+
+    int get_movedrawxoff() { return move_drawoffx; }
+    int get_movedrawyoff() { return move_drawoffy; }
+
+    int get_direction() { return direction; }
+
     void start() { moving = true; }
     void pause() { moving = false; }
 };
 
 class Pacman: public Dibujable {
-
-    bool dead;
 
     void reach_block() {
     	switch((*mapa_matriz)[mapa_x + mapa_y * tam_x]) {
@@ -255,6 +261,9 @@ public:
 
     // Comio bolita especial
     bool ate_special;
+
+    // Muerto
+    bool dead;
 
     Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
 
@@ -312,6 +321,7 @@ public:
     void death_start() {
 		dead = true;
 		sprite_id = 3;
+		sprite.setRotation(0);
     }
 
     bool process_death() {
@@ -533,6 +543,8 @@ public:
 		sprite_id = id;
 		update_dir_anim();
     }
+
+    bool is_slowed() { return slowed; }
 
     void toggle_slowmode() {
 		if (!slowed) speed -= 0.5;
@@ -770,6 +782,58 @@ void pauseAll(vector<Fantasmita>& ghosts, Pacman* player) {
 	player->pause();
 }
 
+void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
+	bool dead = false;
+
+	for (unsigned int i = 0; i < ghosts.size(); i++) {
+
+		if (ghosts[i].is_slowed()) continue;
+
+		if (ghosts[i].getposition_x() == player->getposition_x() && ghosts[i].getposition_y() == player->getposition_y()) {
+			dead = true;
+		}
+
+		switch(ghosts[i].get_direction()) {
+		case 0: // Fantasma derecha
+			if (player->getposition_x() - 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
+				if (abs(abs(player->get_movedrawxoff()) - abs(ghosts[i].get_movedrawxoff())) >= 10) {
+					dead = true;
+				}
+			}
+			break;
+
+		case 1: // Fantasma abajo
+			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() - 1 == ghosts[i].getposition_y()) {
+				if (abs(abs(player->get_movedrawyoff()) - abs(ghosts[i].get_movedrawyoff())) >= 10) {
+					dead = true;
+				}
+			}
+			break;
+
+		case 2: // Fantasma izquierda
+			if (player->getposition_x() + 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
+				if (abs(abs(player->get_movedrawxoff()) - abs(ghosts[i].get_movedrawxoff())) >= 10) {
+					dead = true;
+				}
+			}
+			break;
+
+		case 3: // Fantasma arriba
+			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() + 1 == ghosts[i].getposition_y()) {
+				if (abs(abs(player->get_movedrawyoff()) - abs(ghosts[i].get_movedrawyoff())) >= 10) {
+					dead = true;
+				}
+			}
+			break;
+		}
+	}
+
+	if (dead) {
+		pauseAll(ghosts, player);
+		player->death_start();
+	}
+}
+
 int main()
 {
 	srand(time(NULL));
@@ -777,7 +841,6 @@ int main()
     // Variables
     int ticks = 0, death_ticks = 0;
     bool began = false;
-    bool player_dead = false;
 
     string level_name = "nivel_1";
 
@@ -855,7 +918,6 @@ int main()
 				case sf::Keyboard::X:
 					pauseAll(ghosts, &player);
 					player.death_start();
-					player_dead = true;
 					break;
 
 				case sf::Keyboard::Escape:
@@ -872,15 +934,13 @@ int main()
         obj_mapa.dibujar_mapa();
 
         // Muerte jugador
-        if (player_dead) {
+        if (player.dead) {
 			death_ticks++;
 
 			if (death_ticks >= 8) {
 				death_ticks = 0;
 
 				if (player.process_death()) {
-					player_dead = false;
-
 					ghosts.clear();
 
 					obj_mapa.load_level(level_name);
@@ -897,6 +957,8 @@ int main()
 					ticks = 0;
 				}
 			}
+        } else {
+			checkCollision(&player, ghosts);
         }
 
         player.dibujar();
