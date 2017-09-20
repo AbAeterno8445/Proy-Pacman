@@ -304,7 +304,7 @@ public:
 
     void mover() {
         dib_mover();
-        sprite.setRotation(direction * 90);
+        if (!dead) sprite.setRotation(direction * 90);
     }
 
     void rotar(int dir) {
@@ -578,6 +578,24 @@ public:
     }
 };
 
+class Nodo {
+    int x;
+    int y;
+
+public:
+    int fcost;
+
+    int parent_node;
+
+    Nodo() {
+        x = 0;
+        y = 0;
+
+        fcost = 0;
+        parent_node = 0;
+    }
+};
+
 class Mapa {
 	int tam_x;
 	int tam_y;
@@ -623,6 +641,7 @@ class Mapa {
 public:
 
     vector<int> mapa_pos;
+    vector<Nodo> mapa_nodo;
 
     int pac_spawn_x;
     int pac_spawn_y;
@@ -659,6 +678,7 @@ public:
 
             if (level_loaded) {
 				mapa_pos.clear();
+				mapa_nodo.clear();
             }
 
             string tam_x_str, tam_y_str;
@@ -671,6 +691,10 @@ public:
 			int i = 0, j = 0;
             while(getline(mapfile, sub_line, ',')) {
                 int pos = atoi(sub_line.c_str());
+
+                Nodo bloque_temp;
+
+                mapa_nodo.push_back(bloque_temp);
 
                 switch(pos) {
 				case 27: // Bolitas especiales
@@ -762,6 +786,109 @@ public:
 			}
 		}
 	}
+
+	/** A STAR!! **/
+
+	int astar_hcost(int x1, int y1, int x2, int y2) {
+        int dx = abs(x2 - x1);
+        int dy = abs(y2 - y1);
+
+        int minv = min(dx, dy);
+        int maxv = max(dx, dy);
+
+        int diagonalSteps = minv;
+        int straightSteps = maxv - minv;
+
+        return sqrt(2) * diagonalSteps + straightSteps;
+	}
+
+	int astar_gcost(int x1, int y1, int x2, int y2) {
+        int dx = abs(x2 - x1);
+        int dy = abs(y2 - y1);
+
+        int minv = min(dx, dy);
+        int maxv = max(dx, dy);
+
+        int diagonalSteps = minv;
+        int straightSteps = maxv - minv;
+
+        return 14 * diagonalSteps + 10 * straightSteps;
+	}
+
+	vector<int> trace_path(int x1, int y1, int x2, int y2) {
+        int start_node = x1 + y1 * tam_x;
+        int target_node = x2 + y2 * tam_x;
+
+        mapa_pos[start_node] = 1;
+        mapa_pos[target_node] = 1;
+
+        vector<int> built_path;
+
+        vector<int> open_list;
+        vector<int> closed_list;
+
+        open_list.push_back(start_node);
+
+        while(open_list.size() > 0) {
+            int current_node = open_list[0];
+
+            for(unsigned int i = 0; i < open_list.size(); i++) {
+                int tmp_node = open_list[i];
+
+                if (mapa_nodo[tmp_node].fcost <= mapa_nodo[current_node].fcost) {
+                    current_node = tmp_node;
+                }
+            }
+
+            open_list.erase(find(open_list.begin(), open_list.end(), current_node));
+            closed_list.push_back(current_node);
+
+            if (current_node == target_node) {
+
+                vector<int> retrace_path;
+
+                int retrace_node;
+                retrace_path.push_back(start_node);
+
+                while(retrace_path.size() > 0) {
+                    retrace_node = retrace_path[0];
+
+                    if (mapa_nodo[retrace_node].parent_node != 0) {
+                        retrace_path.push_back(mapa_nodo[retrace_node].parent_node);
+                    }
+
+                    built_path.push_back(retrace_node);
+                    mapa_pos[retrace_node] = 1;
+                }
+
+                return built_path;
+            }
+
+            for(int i = -1; i <= 1; i++) {
+                for (int j = -1; j <= 1; j++) {
+                    if (i == 0 && j == 0) continue;
+
+                    int neighbor_node = (x1 + i) + (y1 + j) * tam_x;
+
+                    if (es_pared(mapa_pos[neighbor_node], true) || find(closed_list.begin(), closed_list.end(), neighbor_node) != closed_list.end())
+                        continue;
+
+                    int moveToNeighborCost = astar_gcost(x1, y1, x2, y2) - astar_gcost(x1 + i, y1 + j, x2, y2);
+
+                    if (moveToNeighborCost < astar_gcost(x1 + i, x1 + j, x2, y2) || find(open_list.begin(), open_list.end(), neighbor_node) == open_list.end()) {
+                        mapa_nodo[neighbor_node].fcost = astar_gcost(x1 + i, y1 + j, x2, y2) + astar_hcost(x1 + i, y1 + j, x2, y2);
+
+                        mapa_nodo[neighbor_node].parent_node = current_node;
+
+                        if (find(open_list.begin(), open_list.end(), neighbor_node) == open_list.end()) {
+                            open_list.push_back(neighbor_node);
+                        }
+                    }
+                }
+            }
+        }
+        return built_path;
+	}
 };
 
 /** FUNCIONES **/
@@ -796,7 +923,7 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 		switch(ghosts[i].get_direction()) {
 		case 0: // Fantasma derecha
 			if (player->getposition_x() - 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawxoff()) - abs(ghosts[i].get_movedrawxoff())) >= 10) {
+				if (abs(abs(player->get_movedrawxoff()) + abs(ghosts[i].get_movedrawxoff())) >= 10) {
 					dead = true;
 				}
 			}
@@ -804,7 +931,7 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 
 		case 1: // Fantasma abajo
 			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() - 1 == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawyoff()) - abs(ghosts[i].get_movedrawyoff())) >= 10) {
+				if (abs(abs(player->get_movedrawyoff()) + abs(ghosts[i].get_movedrawyoff())) >= 10) {
 					dead = true;
 				}
 			}
@@ -812,7 +939,7 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 
 		case 2: // Fantasma izquierda
 			if (player->getposition_x() + 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawxoff()) - abs(ghosts[i].get_movedrawxoff())) >= 10) {
+				if (abs(abs(player->get_movedrawxoff()) + abs(ghosts[i].get_movedrawxoff())) >= 10) {
 					dead = true;
 				}
 			}
@@ -820,7 +947,7 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 
 		case 3: // Fantasma arriba
 			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() + 1 == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawyoff()) - abs(ghosts[i].get_movedrawyoff())) >= 10) {
+				if (abs(abs(player->get_movedrawyoff()) + abs(ghosts[i].get_movedrawyoff())) >= 10) {
 					dead = true;
 				}
 			}
@@ -916,8 +1043,7 @@ int main()
                     break;
 
 				case sf::Keyboard::X:
-					pauseAll(ghosts, &player);
-					player.death_start();
+					obj_mapa.trace_path(1, 1, 7, 7);
 					break;
 
 				case sf::Keyboard::Escape:
