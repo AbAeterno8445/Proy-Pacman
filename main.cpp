@@ -16,6 +16,8 @@ inline bool es_pared(int tipo, bool bloque_paso) {
     return true;
 }
 
+/** DIBUJABLE **/
+
 class Dibujable {
 protected:
     sf::Texture* texture_pt;
@@ -100,19 +102,20 @@ public:
     }
 
     void dibujar() {
+		if (anim_frames > 1) {
+			if (sprite_animstate++ == anim_speed) {
+				sprite_animstate = 0;
 
-        if (sprite_animstate++ == anim_speed) {
-            sprite_animstate = 0;
+				if (moving) {
+					sprite_id = anim_movement[anim_current];
+					anim_current++;
 
-            if (moving) {
-                sprite_id = anim_movement[anim_current];
-                anim_current++;
-
-                if (anim_current == anim_frames) {
-                    anim_current = 0;
-                }
-            }
-        }
+					if (anim_current == anim_frames) {
+						anim_current = 0;
+					}
+				}
+			}
+		}
 
 		sprite.setTextureRect(sf::IntRect((sprite_id % sprite_columns) * 16, floor(sprite_id / sprite_columns) * 16, 16, 16));
 
@@ -236,19 +239,26 @@ public:
     void pause() { moving = false; }
 };
 
+/** PACMAN **/
+
 class Pacman: public Dibujable {
+
+	int ghosts_eaten;
+
+	int lives;
+	sf::Sprite lives_sprite;
 
     void reach_block() {
     	switch((*mapa_matriz)[mapa_x + mapa_y * tam_x]) {
 		case 29: // Bolita comun
 			(*mapa_matriz)[mapa_x + mapa_y * tam_x] = 11;
-			score_player += 100;
+			score_player += 10;
 			break;
 
 		case 27: // Bolitas especiales
 		case 28:
 			(*mapa_matriz)[mapa_x + mapa_y * tam_x] = 11;
-			score_player += 400;
+			score_player += 50;
 			ate_special = true;
 			break;
     	}
@@ -268,6 +278,12 @@ public:
     Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
 
     	score_player = 0;
+    	ghosts_eaten = 0;
+
+    	lives = 3;
+    	lives_sprite.setTexture(*texture_param);
+    	lives_sprite.setScale(2, 2);
+    	lives_sprite.setTextureRect(sf::IntRect(0, 0, 16, 16));
 
     	dead = false;
 
@@ -291,7 +307,7 @@ public:
         moving = false;
     }
 
-    void reset() {
+    void reset(bool reset_lives) {
 		score_player = 0;
 
 		sprite_id = 2;
@@ -299,7 +315,19 @@ public:
 		move_queue = 0;
 		speed = 1.7;
 
+		if (reset_lives) lives = 3;
+
 		moving = false;
+    }
+
+    int get_lives() { return lives; }
+
+    void dibujar_vidas() {
+    	for (int i = 0; i < lives; i++) {
+			lives_sprite.setPosition(sf::Vector2f(draw_xoff - 64, draw_yoff + 40 * (i + 1)));
+
+			window->draw(lives_sprite);
+    	}
     }
 
     void mover() {
@@ -322,6 +350,7 @@ public:
 		dead = true;
 		sprite_id = 3;
 		sprite.setRotation(0);
+		lives--;
     }
 
     bool process_death() {
@@ -333,9 +362,22 @@ public:
 
 		return false;
     }
+
+    int get_ghosts_eaten() { return ghosts_eaten; }
+
+    void ghost_eaten() {
+		ghosts_eaten++;
+		score_player += 100 * pow(2, ghosts_eaten);
+    }
+
+    void ghost_eaten_reset() { ghosts_eaten = 0; }
 };
 
+/** FANTASMA **/
+
 class Fantasmita : public Dibujable {
+
+	int type;
 
 	int ghost_spriteid;
 
@@ -349,6 +391,9 @@ class Fantasmita : public Dibujable {
     int active_ticks;
     int activation_ticks;
     bool past_firstblock;
+
+    int start_x;
+    int start_y;
 
     void update_dir_anim() {
     	if (slowed) {
@@ -526,12 +571,45 @@ public:
 
         corner = false;
 
+        type = 0;
+
         slowed = false;
         slowed_ticks = 0;
 
         activation_ticks = 60;
         active_ticks = 0;
         past_firstblock = false;
+
+        start_x = 1;
+        start_y = 1;
+    }
+
+    void set_type(int type_p) { type = type_p; }
+    int get_type() { return type; }
+
+    void reset() {
+		mapa_x = start_x;
+		mapa_y = start_y;
+
+		blocks_passed = 0;
+
+		speed = 1.5;
+		direction = 0;
+		moving = false;
+
+		corner = false;
+
+		slowed = false;
+		slowed_ticks = 0;
+
+		active_ticks = 0;
+		past_firstblock = false;
+
+		move_drawoffx = 0;
+		move_drawoffy = 0;
+
+		update_dir_anim();
+		sprite_id = anim_movement[0];
     }
 
     void set_activation_ticks(int ticks) {
@@ -555,16 +633,20 @@ public:
 		update_dir_anim();
     }
 
-    void process_slowmode() {
+    bool process_slowmode() {
 		if (slowed) {
 			if (slowed_ticks > 0) {
 				slowed_ticks--;
 			} else {
-				slowed = false;
 				speed += 0.5;
+				slowed = false;
+
+				return true;
 			}
 			update_dir_anim();
 		}
+
+		return false;
     }
 
     void process_activation() {
@@ -576,7 +658,105 @@ public:
 			active_ticks++;
 		}
     }
+
+    int get_startx() { return start_x; }
+    int get_starty() { return start_y; }
+
+    void set_startposition(int x, int y) {
+		start_x = x;
+		start_y = y;
+    }
 };
+
+/** OJOS FANTASMA **/
+
+class Ojos_Fantasma : public Dibujable {
+	int tipo_fantasma;
+
+	bool path_finished;
+
+	vector<int> path;
+
+public:
+	// Constructor
+	Ojos_Fantasma(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
+		tipo_fantasma = 0;
+		path_finished = false;
+
+		anim_frames = 1;
+		sprite_id = 21;
+
+		direction = 0;
+		speed = 4;
+
+		mapa_x = 1;
+		mapa_y = 1;
+
+		tam_x = 0;
+		tam_y = 0;
+
+		sprite_columns = 12;
+
+		move_considerpassblock = false;
+
+		moving = false;
+
+		update_dir_anim();
+	}
+
+	int get_ghosttype() { return tipo_fantasma; }
+	void set_ghosttype(int type) { tipo_fantasma = type; }
+
+	bool finished() { return path_finished; }
+
+	void update_dir_anim() {
+		switch(direction) {
+		// Derecha
+		case 0: sprite_id = 20; break;
+		// Abajo
+		case 1: sprite_id = 23; break;
+		// Izquierda
+		case 2: sprite_id = 21; break;
+		// Arriba
+		case 3: sprite_id = 22; break;
+		}
+	}
+
+	void start_path(vector<int> path_param) {
+		path = path_param;
+		process_path();
+	}
+
+	void reach_block() {
+		process_path();
+	}
+
+	void process_path() {
+		if (path.size() > 0) {
+			for (int i = -1; i <= 1; i++) {
+				for (int j = -1; j <= 1; j++) {
+					if ((i == 0 && j == 0) || (i != 0 && j != 0)) continue;
+
+					if (path[0] == (mapa_x + i) + (mapa_y + j) * tam_x) {
+						path.erase(path.begin());
+
+						if (j == -1) direction = 3; // Arriba
+						else if (j == 1) direction = 1; // Abajo
+						else if (i == -1) direction = 2; // Izquierda
+						else if (i == 1) direction = 0; // Derecha
+
+						moving = true;
+						update_dir_anim();
+					}
+				}
+			}
+		} else {
+			path_finished = true;
+		}
+	}
+};
+
+/** NODO **/
 
 class Nodo {
     int x;
@@ -584,6 +764,7 @@ class Nodo {
 
 public:
     int fcost;
+    int gcost;
 
     int parent_node;
 
@@ -592,9 +773,34 @@ public:
         y = 0;
 
         fcost = 0;
+        gcost = 0;
         parent_node = 0;
     }
+
+    int get_x() { return x; }
+    int get_y() { return y; }
+
+    void setposition(int x_p, int y_p) {
+		x = x_p;
+		y = y_p;
+    }
+
+    // Prueba
+    bool clicked(int x_p, int y_p, int xoff, int yoff) {
+
+    	int draw_x = x * 32 + xoff;
+    	int draw_y = y * 32 + yoff;
+
+		if (x_p > draw_x - 16 && x_p < draw_x + 16 &&
+			y_p > draw_y - 16 && y_p < draw_y + 16) {
+				return true;
+		}
+
+		return false;
+	}
 };
+
+/** MAPA **/
 
 class Mapa {
 	int tam_x;
@@ -620,22 +826,6 @@ class Mapa {
 		sprite_paredes.setPosition(sf::Vector2f(x * 32 + draw_xoff, y * 32 + draw_yoff));
 
 		window->draw(sprite_paredes);
-	}
-
-	// Crear fantasma en posicion x, y
-	// 0 -> Rojo / 1 -> Rosa / 2 -> Azul / 3 -> Naranja
-	void createGhost(vector<Fantasmita>& ghosts, sf::Texture* ghost_texture, int tipo, int x, int y) {
-		Fantasmita ghost_temp(window, ghost_texture, &mapa_pos);
-
-		ghost_temp.set_ghost_spriteid(tipo * 12);
-
-		ghost_temp.set_activation_ticks(60 * 5 * tipo);
-
-		ghost_temp.setposition(x, y);
-
-		ghost_temp.set_mapsize(tam_x, tam_y);
-
-		ghosts.push_back(ghost_temp);
 	}
 
 public:
@@ -668,6 +858,33 @@ public:
 	int get_tam_x() { return tam_x; }
 	int get_tam_y() { return tam_y; }
 
+	int get_drawxoff() { return draw_xoff; }
+	int get_drawyoff() { return draw_yoff; }
+
+	sf::RenderWindow* get_windowpt() { return window; }
+
+	// Crear fantasma en posicion x, y
+	// 0 -> Rojo / 1 -> Rosa / 2 -> Azul / 3 -> Naranja
+	void createGhost(vector<Fantasmita>& ghosts, sf::Texture* ghost_texture, int tipo, int x, int y, int act_ticks, bool start) {
+		Fantasmita ghost_temp(window, ghost_texture, &mapa_pos);
+
+		ghost_temp.set_ghost_spriteid(tipo * 12);
+
+		ghost_temp.set_activation_ticks(act_ticks);
+
+		ghost_temp.set_type(tipo);
+
+		ghost_temp.setposition(x, y);
+		ghost_temp.set_startposition(x, y);
+		ghost_temp.set_drawoffset(draw_xoff, draw_yoff);
+
+		ghost_temp.set_mapsize(tam_x, tam_y);
+
+		if (start) ghost_temp.start();
+
+		ghosts.push_back(ghost_temp);
+	}
+
 	// Cargar nivel
 	void load_level(string lvlname) {
 		fstream mapfile;
@@ -695,6 +912,7 @@ public:
                 Nodo bloque_temp;
 
                 mapa_nodo.push_back(bloque_temp);
+                mapa_nodo.back().setposition(i, j);
 
                 switch(pos) {
 				case 27: // Bolitas especiales
@@ -733,22 +951,22 @@ public:
 			for (int j = 0; j < tam_y; j++) {
 				switch(mapa_pos[i + j * tam_x]) {
 				case 31: // Rojo
-					createGhost(ghosts, ghost_texture, 0, i, j);
+					createGhost(ghosts, ghost_texture, 0, i, j, 1, false);
 					mapa_pos[i + j * tam_x] = 11;
 					break;
 
 				case 32: // Rosa
-					createGhost(ghosts, ghost_texture, 1, i, j);
+					createGhost(ghosts, ghost_texture, 1, i, j, 180, false);
 					mapa_pos[i + j * tam_x] = 11;
 					break;
 
 				case 33: // Azul
-					createGhost(ghosts, ghost_texture, 2, i, j);
+					createGhost(ghosts, ghost_texture, 2, i, j, 420, false);
 					mapa_pos[i + j * tam_x] = 11;
 					break;
 
 				case 34: // Naranja
-					createGhost(ghosts, ghost_texture, 3, i, j);
+					createGhost(ghosts, ghost_texture, 3, i, j, 540, false);
 					mapa_pos[i + j * tam_x] = 11;
 					break;
 				}
@@ -789,20 +1007,7 @@ public:
 
 	/** A STAR!! **/
 
-	int astar_hcost(int x1, int y1, int x2, int y2) {
-        int dx = abs(x2 - x1);
-        int dy = abs(y2 - y1);
-
-        int minv = min(dx, dy);
-        int maxv = max(dx, dy);
-
-        int diagonalSteps = minv;
-        int straightSteps = maxv - minv;
-
-        return sqrt(2) * diagonalSteps + straightSteps;
-	}
-
-	int astar_gcost(int x1, int y1, int x2, int y2) {
+	int astar_dist(int x1, int y1, int x2, int y2) {
         int dx = abs(x2 - x1);
         int dy = abs(y2 - y1);
 
@@ -819,9 +1024,6 @@ public:
         int start_node = x1 + y1 * tam_x;
         int target_node = x2 + y2 * tam_x;
 
-        mapa_pos[start_node] = 1;
-        mapa_pos[target_node] = 1;
-
         vector<int> built_path;
 
         vector<int> open_list;
@@ -832,11 +1034,21 @@ public:
         while(open_list.size() > 0) {
             int current_node = open_list[0];
 
+            int current_x = current_node % tam_x;
+            int current_y = (current_node - current_node % tam_x) / tam_x;
+
             for(unsigned int i = 0; i < open_list.size(); i++) {
                 int tmp_node = open_list[i];
 
-                if (mapa_nodo[tmp_node].fcost <= mapa_nodo[current_node].fcost) {
-                    current_node = tmp_node;
+				int tmp_node_x = tmp_node % tam_x;
+				int tmp_node_y = (tmp_node - tmp_node % tam_x) / tam_x;
+
+                if (mapa_nodo[tmp_node].fcost < mapa_nodo[current_node].fcost ||
+					(mapa_nodo[tmp_node].fcost == mapa_nodo[current_node].fcost && astar_dist(tmp_node_x, tmp_node_y, x2, y2) < astar_dist(current_x, current_y, x2, y2))) {
+						current_node = tmp_node;
+
+						current_x = tmp_node_x;
+						current_y = tmp_node_y;
                 }
             }
 
@@ -845,38 +1057,33 @@ public:
 
             if (current_node == target_node) {
 
-                vector<int> retrace_path;
+                int retrace_node = target_node;
 
-                int retrace_node;
-                retrace_path.push_back(start_node);
-
-                while(retrace_path.size() > 0) {
-                    retrace_node = retrace_path[0];
-
-                    if (mapa_nodo[retrace_node].parent_node != 0) {
-                        retrace_path.push_back(mapa_nodo[retrace_node].parent_node);
-                    }
-
+                while(retrace_node != start_node) {
                     built_path.push_back(retrace_node);
-                    mapa_pos[retrace_node] = 1;
+
+					retrace_node = mapa_nodo[retrace_node].parent_node;
                 }
+                reverse(built_path.begin(), built_path.end());
 
                 return built_path;
             }
 
             for(int i = -1; i <= 1; i++) {
                 for (int j = -1; j <= 1; j++) {
-                    if (i == 0 && j == 0) continue;
+                    if ((i == 0 && j == 0) || (i != 0 && j != 0)) continue;
 
-                    int neighbor_node = (x1 + i) + (y1 + j) * tam_x;
+                    int neighbor_node = (current_x + i) + (current_y + j) * tam_x;
 
-                    if (es_pared(mapa_pos[neighbor_node], true) || find(closed_list.begin(), closed_list.end(), neighbor_node) != closed_list.end())
+                    if (es_pared(mapa_pos[neighbor_node], false) || find(closed_list.begin(), closed_list.end(), neighbor_node) != closed_list.end())
                         continue;
 
-                    int moveToNeighborCost = astar_gcost(x1, y1, x2, y2) - astar_gcost(x1 + i, y1 + j, x2, y2);
+                    int moveToNeighborCost = mapa_nodo[current_node].gcost + astar_dist(current_x, current_y, current_x + i, current_y + j);
 
-                    if (moveToNeighborCost < astar_gcost(x1 + i, x1 + j, x2, y2) || find(open_list.begin(), open_list.end(), neighbor_node) == open_list.end()) {
-                        mapa_nodo[neighbor_node].fcost = astar_gcost(x1 + i, y1 + j, x2, y2) + astar_hcost(x1 + i, y1 + j, x2, y2);
+                    if (moveToNeighborCost < mapa_nodo[neighbor_node].gcost || find(open_list.begin(), open_list.end(), neighbor_node) == open_list.end()) {
+                        mapa_nodo[neighbor_node].fcost = moveToNeighborCost + astar_dist(current_x + i, current_y + j, x2, y2);
+
+                        mapa_nodo[neighbor_node].gcost = moveToNeighborCost;
 
                         mapa_nodo[neighbor_node].parent_node = current_node;
 
@@ -889,6 +1096,101 @@ public:
         }
         return built_path;
 	}
+};
+
+/** EFECTOS **/
+
+class Efecto {
+	int draw_x;
+	int draw_y;
+
+	int draw_xoff;
+	int draw_yoff;
+
+	int sprite_id;
+	int frames;
+	int total_frames;
+	int frames_ticker;
+	int anim_speed;
+
+	int anim_columns;
+
+	bool anim_done;
+
+	bool static_fx;
+
+	sf::Sprite sprite;
+	sf::Texture* texture;
+
+	sf::RenderWindow* window;
+
+public:
+	// Constructor
+	Efecto(sf::RenderWindow* window_param, sf::Texture* texture_param) {
+		window = window_param;
+		texture = texture_param;
+
+		sprite.setTexture(*texture);
+		sprite.setScale(2, 2);
+
+		draw_x = 0;
+		draw_y = 0;
+
+		draw_xoff = 0;
+		draw_yoff = 0;
+
+		sprite_id = 0;
+		frames = 0;
+		total_frames = 0;
+		frames_ticker = 0;
+		anim_speed = 0;
+
+		anim_columns = 0;
+
+		anim_done = false;
+
+		static_fx = false;
+	}
+
+	void set_anim(int anim_cols, int start_frame, int tot_frames, int speed, bool stat) {
+		anim_columns = anim_cols;
+		sprite_id = start_frame;
+		total_frames = tot_frames;
+		anim_speed = speed;
+		static_fx = stat;
+	}
+
+	void set_drawposition(int x, int y) {
+		draw_x = x;
+		draw_y = y;
+	}
+
+	void set_drawoffset(int xoff, int yoff) {
+		draw_xoff = xoff;
+		draw_yoff = yoff;
+	}
+
+	void dibujar() {
+		sprite.setPosition(sf::Vector2f(draw_x + draw_xoff, draw_y + draw_yoff));
+
+		sprite.setTextureRect(sf::IntRect((sprite_id % anim_columns) * 16, floor(sprite_id / anim_columns) * 16, 16, 16));
+
+		frames_ticker++;
+		if (frames_ticker >= anim_speed) {
+			frames_ticker = 0;
+
+			if (!static_fx) sprite_id++;
+
+			frames++;
+			if (frames >= total_frames) {
+				anim_done = true;
+			}
+		}
+
+		window->draw(sprite);
+	}
+
+	bool done() { return anim_done; }
 };
 
 /** FUNCIONES **/
@@ -909,22 +1211,31 @@ void pauseAll(vector<Fantasmita>& ghosts, Pacman* player) {
 	player->pause();
 }
 
-void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
+void checkCollision(Pacman* player, vector<Fantasmita>& ghosts, vector<Ojos_Fantasma>& ghost_eyes, sf::Texture* ghost_texture, Mapa* mapa, vector<Efecto>& effects) {
 	bool dead = false;
+	bool eaten = false;
+
+	int eaten_id = 0;
 
 	for (unsigned int i = 0; i < ghosts.size(); i++) {
 
-		if (ghosts[i].is_slowed()) continue;
-
 		if (ghosts[i].getposition_x() == player->getposition_x() && ghosts[i].getposition_y() == player->getposition_y()) {
-			dead = true;
+			if (!ghosts[i].is_slowed()) dead = true;
+			else {
+				eaten = true;
+				eaten_id = i;
+			}
 		}
 
 		switch(ghosts[i].get_direction()) {
 		case 0: // Fantasma derecha
 			if (player->getposition_x() - 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
 				if (abs(abs(player->get_movedrawxoff()) + abs(ghosts[i].get_movedrawxoff())) >= 10) {
-					dead = true;
+					if (!ghosts[i].is_slowed()) dead = true;
+					else {
+						eaten = true;
+						eaten_id = i;
+					}
 				}
 			}
 			break;
@@ -932,7 +1243,11 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 		case 1: // Fantasma abajo
 			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() - 1 == ghosts[i].getposition_y()) {
 				if (abs(abs(player->get_movedrawyoff()) + abs(ghosts[i].get_movedrawyoff())) >= 10) {
-					dead = true;
+					if (!ghosts[i].is_slowed()) dead = true;
+					else {
+						eaten = true;
+						eaten_id = i;
+					}
 				}
 			}
 			break;
@@ -940,7 +1255,11 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 		case 2: // Fantasma izquierda
 			if (player->getposition_x() + 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
 				if (abs(abs(player->get_movedrawxoff()) + abs(ghosts[i].get_movedrawxoff())) >= 10) {
-					dead = true;
+					if (!ghosts[i].is_slowed()) dead = true;
+					else {
+						eaten = true;
+						eaten_id = i;
+					}
 				}
 			}
 			break;
@@ -948,7 +1267,11 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 		case 3: // Fantasma arriba
 			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() + 1 == ghosts[i].getposition_y()) {
 				if (abs(abs(player->get_movedrawyoff()) + abs(ghosts[i].get_movedrawyoff())) >= 10) {
-					dead = true;
+					if (!ghosts[i].is_slowed()) dead = true;
+					else {
+						eaten = true;
+						eaten_id = i;
+					}
 				}
 			}
 			break;
@@ -958,6 +1281,35 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts) {
 	if (dead) {
 		pauseAll(ghosts, player);
 		player->death_start();
+	}
+	else if (eaten) {
+		Ojos_Fantasma ojo_temp(mapa->get_windowpt(), ghost_texture, &mapa->mapa_pos);
+
+		int ojo_x = ghosts[eaten_id].getposition_x();
+		int ojo_y = ghosts[eaten_id].getposition_y();
+
+		ojo_temp.setposition(ojo_x, ojo_y);
+		ojo_temp.set_mapsize(mapa->get_tam_x(), mapa->get_tam_y());
+
+		ojo_temp.set_ghosttype(ghosts[eaten_id].get_type());
+
+		ojo_temp.set_drawoffset(mapa->get_drawxoff(), mapa->get_drawyoff());
+
+		ojo_temp.start_path(mapa->trace_path(ojo_x, ojo_y, ghosts[eaten_id].get_startx(), ghosts[eaten_id].get_starty()));
+
+		ghost_eyes.push_back(ojo_temp);
+		ghosts.erase(ghosts.begin() + eaten_id);
+
+		player->ghost_eaten();
+
+		// Efecto al comer fantasma
+		Efecto eaten_fx(mapa->get_windowpt(), ghost_texture);
+		eaten_fx.set_anim(12, 47 + player->get_ghosts_eaten(), 1, 120, true);
+
+		eaten_fx.set_drawoffset(mapa->get_drawxoff(), mapa->get_drawyoff());
+		eaten_fx.set_drawposition(ojo_x * 32, ojo_y * 32);
+
+		effects.push_back(eaten_fx);
 	}
 }
 
@@ -992,8 +1344,14 @@ int main()
     player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
     player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
 
+    // Efectos
+    vector<Efecto> effects;
+
     // Fantasmas
     vector<Fantasmita> ghosts;
+
+    // Ojos de fantasmas
+    vector<Ojos_Fantasma> ghost_eyes;
 
     // Mapa -> Cargar fantasmas
     obj_mapa.load_ghosts(ghosts, &ghosts_texture);
@@ -1015,6 +1373,9 @@ int main()
     text_ready.setFillColor(sf::Color::Yellow);
     text_ready.setOrigin(sf::Vector2f(text_ready.getLocalBounds().width / 2, 0));
     text_ready.setPosition(sf::Vector2f(window.getSize().x / 2 + 16, 16));
+
+    int gameover_ticks = 0;
+    bool gameover = false;
 
     while (window.isOpen())
     {
@@ -1042,10 +1403,6 @@ int main()
                     player.rotar(0);
                     break;
 
-				case sf::Keyboard::X:
-					obj_mapa.trace_path(1, 1, 7, 7);
-					break;
-
 				case sf::Keyboard::Escape:
 					window.close();
 					break;
@@ -1060,34 +1417,68 @@ int main()
         obj_mapa.dibujar_mapa();
 
         // Muerte jugador
-        if (player.dead) {
-			death_ticks++;
+        if (!gameover) {
+			if (player.dead) {
+				death_ticks++;
 
-			if (death_ticks >= 8) {
-				death_ticks = 0;
+				if (death_ticks >= 8) {
+					death_ticks = 0;
 
-				if (player.process_death()) {
-					ghosts.clear();
+					if (player.process_death()) {
+						if (player.get_lives() <= 0) {
+							gameover = true;
+						}
+						else {
+							for (unsigned int i = 0; i < ghosts.size(); i++) {
+								ghosts[i].reset();
+							}
+							player.reset(false);
+							player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
+						}
 
-					obj_mapa.load_level(level_name);
-					obj_mapa.load_ghosts(ghosts, &ghosts_texture);
-
-					player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
-
-					player.reset();
-					player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
-
-					setDrawOffset(&player, ghosts, &obj_mapa, draw_xoff, draw_yoff);
-
-					began = false;
-					ticks = 0;
+						began = false;
+						ticks = 0;
+					}
 				}
+			} else {
+				checkCollision(&player, ghosts, ghost_eyes, &ghosts_texture, &obj_mapa, effects);
 			}
         } else {
-			checkCollision(&player, ghosts);
+        	gameover_ticks++;
+
+        	if (gameover_ticks >= 90) {
+        		text_ready.setString("Game Over!");
+				window.draw(text_ready);
+        	}
+
+        	if (gameover_ticks >= 270) {
+				ghosts.clear();
+
+				obj_mapa.load_level(level_name);
+				obj_mapa.load_ghosts(ghosts, &ghosts_texture);
+
+				player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
+
+				player.reset(true);
+				player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
+
+				setDrawOffset(&player, ghosts, &obj_mapa, draw_xoff, draw_yoff);
+
+				gameover = false;
+				gameover_ticks = 0;
+
+				text_ready.setString("Ready!");
+        	}
+
+        	window.display();
+
+        	continue;
         }
 
+        if (gameover) continue;
+
         player.dibujar();
+        player.dibujar_vidas();
         player.mover();
 
         // Efecto bolita especial
@@ -1099,11 +1490,33 @@ int main()
 			}
         }
 
+        // Procesar fantasmas
 	 	for (unsigned int i = 0; i < ghosts.size(); i++) {
 			ghosts[i].dibujar();
 			ghosts[i].dib_mover();
-			ghosts[i].process_slowmode();
+			if (ghosts[i].process_slowmode()) {
+				player.ghost_eaten_reset();
+			}
 			ghosts[i].process_activation();
+        }
+
+        // Procesar ojos de fantasmas
+        for (unsigned int i = 0; i < ghost_eyes.size(); i++) {
+			ghost_eyes[i].dibujar();
+			ghost_eyes[i].dib_mover();
+
+			if (ghost_eyes[i].finished()) {
+				obj_mapa.createGhost(ghosts, &ghosts_texture, ghost_eyes[i].get_ghosttype(), ghost_eyes[i].getposition_x(), ghost_eyes[i].getposition_y(), 1, true);
+
+				ghost_eyes.erase(ghost_eyes.begin() + i);
+			}
+        }
+
+        // Procesar efectos
+        for (unsigned int i = 0; i < effects.size(); i++) {
+			effects[i].dibujar();
+
+			if (effects[i].done()) effects.erase(effects.begin() + i);
         }
 
         text_score.setString("Score: " + to_string(player.score_player));
