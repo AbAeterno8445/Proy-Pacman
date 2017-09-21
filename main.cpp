@@ -307,15 +307,16 @@ public:
         moving = false;
     }
 
-    void reset(bool reset_lives) {
-		score_player = 0;
-
+    void reset(bool reset_level) {
 		sprite_id = 2;
 		direction = 0;
 		move_queue = 0;
 		speed = 1.7;
 
-		if (reset_lives) lives = 3;
+		if (reset_level) {
+			score_player = 0;
+			lives = 3;
+		}
 
 		moving = false;
     }
