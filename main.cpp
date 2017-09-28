@@ -197,16 +197,36 @@ public:
 
             if (rot) {
                 switch(move_queue) {
-                    case 0: if (!es_pared((*mapa_matriz)[(mapa_x + 1) + mapa_y * tam_x], move_considerpassblock)) direction = move_queue;
+                    case 0:
+                        if (!es_pared((*mapa_matriz)[(mapa_x + 1) + mapa_y * tam_x], move_considerpassblock)) {
+                            if (mapa_x > 0 && mapa_y > 0 && mapa_x < tam_x - 1 && mapa_y < tam_y - 1) {
+                                direction = move_queue;
+                            }
+                        }
                         break;
 
-                    case 1: if (!es_pared((*mapa_matriz)[mapa_x + (mapa_y + 1) * tam_x], move_considerpassblock)) direction = move_queue;
+                    case 1:
+                        if (!es_pared((*mapa_matriz)[mapa_x + (mapa_y + 1) * tam_x], move_considerpassblock)) {
+                            if (mapa_x > 0 && mapa_y > 0 && mapa_x < tam_x - 1 && mapa_y < tam_y - 1) {
+                                direction = move_queue;
+                            }
+                        }
                         break;
 
-                    case 2: if (!es_pared((*mapa_matriz)[(mapa_x - 1) + mapa_y * tam_x], move_considerpassblock)) direction = move_queue;
+                    case 2:
+                        if (!es_pared((*mapa_matriz)[(mapa_x - 1) + mapa_y * tam_x], move_considerpassblock)) {
+                            if (mapa_x > 0 && mapa_y > 0 && mapa_x < tam_x - 1 && mapa_y < tam_y - 1) {
+                                direction = move_queue;
+                            }
+                        }
                         break;
 
-                    case 3: if (!es_pared((*mapa_matriz)[mapa_x + (mapa_y - 1) * tam_x], move_considerpassblock)) direction = move_queue;
+                    case 3:
+                        if (!es_pared((*mapa_matriz)[mapa_x + (mapa_y - 1) * tam_x], move_considerpassblock)) {
+                            if (mapa_x > 0 && mapa_y > 0 && mapa_x < tam_x - 1 && mapa_y < tam_y - 1) {
+                                direction = move_queue;
+                            }
+                        }
                         break;
                 }
                 reach_block();
@@ -248,19 +268,48 @@ class Pacman: public Dibujable {
 	int lives;
 	sf::Sprite lives_sprite;
 
+	int bolitas;
+
     void reach_block() {
     	switch((*mapa_matriz)[mapa_x + mapa_y * tam_x]) {
 		case 29: // Bolita comun
 			(*mapa_matriz)[mapa_x + mapa_y * tam_x] = 11;
 			score_player += 10;
+			bolitas++;
 			break;
 
 		case 27: // Bolitas especiales
 		case 28:
 			(*mapa_matriz)[mapa_x + mapa_y * tam_x] = 11;
 			score_player += 50;
+			ghosts_eaten = 0;
 			ate_special = true;
+			bolitas++;
 			break;
+    	}
+
+    	// Traspasar el mapa
+    	// Horizontal
+    	if (mapa_x == 0) {
+            if ((*mapa_matriz)[(tam_x - 1) + mapa_y * tam_x] == 11) {
+                mapa_x = tam_x - 1;
+            }
+    	}
+    	else if (mapa_x == (tam_x - 1)) {
+            if ((*mapa_matriz)[mapa_y * tam_x] == 11) {
+                mapa_x = 0;
+            }
+    	}
+    	// Vertical
+    	if (mapa_y == 0) {
+            if ((*mapa_matriz)[mapa_x + (tam_y - 1) * tam_x] == 11) {
+                mapa_y = tam_y - 1;
+            }
+    	}
+    	else if (mapa_y == (tam_y - 1)) {
+            if ((*mapa_matriz)[mapa_x] == 11) {
+                mapa_y = 0;
+            }
     	}
     }
 
@@ -279,6 +328,8 @@ public:
 
     	score_player = 0;
     	ghosts_eaten = 0;
+
+    	bolitas = 0;
 
     	lives = 3;
     	lives_sprite.setTexture(*texture_param);
@@ -307,21 +358,32 @@ public:
         moving = false;
     }
 
-    void reset(bool reset_level) {
+    void reset(int reset_mode) {
 		sprite_id = 2;
 		direction = 0;
 		move_queue = 0;
 		speed = 1.7;
+		ghosts_eaten = 0;
 
-		if (reset_level) {
-			score_player = 0;
+		switch(reset_mode) {
+        case 1: // GAME OVER
+            score_player = 0;
 			lives = 3;
+			bolitas = 0;
+            break;
+
+        case 2: // Luego de ganar nivel
+			if (lives < 3) lives++;
+			bolitas = 0;
+            break;
 		}
 
 		moving = false;
     }
 
     int get_lives() { return lives; }
+
+    int get_bolitas() { return bolitas; }
 
     void dibujar_vidas() {
     	for (int i = 0; i < lives; i++) {
@@ -546,6 +608,30 @@ class Fantasmita : public Dibujable {
 			}
 
 			move_dir_random(behind_dir);
+    	}
+
+    	// Traspasar el mapa
+    	// Horizontal
+    	if (mapa_x == 0) {
+            if ((*mapa_matriz)[(tam_x - 1) + mapa_y * tam_x] == 11) {
+                mapa_x = tam_x - 1;
+            }
+    	}
+    	else if (mapa_x == (tam_x - 1)) {
+            if ((*mapa_matriz)[mapa_y * tam_x] == 11) {
+                mapa_x = 0;
+            }
+    	}
+    	// Vertical
+    	if (mapa_y == 0) {
+            if ((*mapa_matriz)[mapa_x + (tam_y - 1) * tam_x] == 11) {
+                mapa_y = tam_y - 1;
+            }
+    	}
+    	else if (mapa_y == (tam_y - 1)) {
+            if ((*mapa_matriz)[mapa_x] == 11) {
+                mapa_y = 0;
+            }
     	}
     }
 
@@ -818,6 +904,8 @@ class Mapa {
 	vector<int> bol_especiales;
 	int bol_anim;
 
+	int bolas_totales;
+
 	bool level_loaded;
 
 	// Dibujar una sola pared
@@ -852,6 +940,8 @@ public:
 		tam_y = 0;
 
 		bol_anim = 0;
+
+		bolas_totales = 0;
 
 		level_loaded = false;
 	}
@@ -906,6 +996,8 @@ public:
             tam_x = atoi(tam_x_str.c_str());
             tam_y = atoi(tam_y_str.c_str());
 
+            bolas_totales = 0;
+
 			int i = 0, j = 0;
             while(getline(mapfile, sub_line, ',')) {
                 int pos = atoi(sub_line.c_str());
@@ -920,7 +1012,14 @@ public:
 				case 28:
 					mapa_pos.push_back(pos);
 					bol_especiales.push_back(i + j * tam_x);
+
+					bolas_totales++;
 					break;
+
+                case 29:
+                    mapa_pos.push_back(pos);
+                    bolas_totales++;
+                    break;
 
 				case 30: // Posicion inicial pacman
 					pac_spawn_x = i;
@@ -941,6 +1040,7 @@ public:
             }
 
             level_loaded = true;
+            cout << "Bolas tot:" << bolas_totales << endl;
 
             mapfile.close();
 		}
@@ -976,7 +1076,10 @@ public:
 	}
 
 	// Cambiar posicion de dibujado del mapa
-	void set_drawoffset(int xoff_param, int yoff_param) {
+	void set_drawoffset(double xoff_param, double yoff_param) {
+	    xoff_param = (1280 - (tam_x * 32)) / 2;
+	    yoff_param = (720 - (tam_y * 32)) / 2;
+
 		draw_xoff = xoff_param;
 		draw_yoff = yoff_param;
 	}
@@ -1005,6 +1108,8 @@ public:
 			}
 		}
 	}
+
+	int get_bolas_totales() { return bolas_totales; }
 
 	/** A STAR!! **/
 
@@ -1205,9 +1310,12 @@ void setDrawOffset(Pacman* pacman, vector<Fantasmita>& ghosts, Mapa* mapa, int x
     }
 };
 
-void pauseAll(vector<Fantasmita>& ghosts, Pacman* player) {
+void pauseAll(vector<Fantasmita>& ghosts, Pacman* player, vector<Ojos_Fantasma>& ghost_eyes) {
 	for (unsigned int i = 0; i < ghosts.size(); i++) {
 		ghosts[i].pause();
+	}
+	for (unsigned int i = 0; i < ghost_eyes.size(); i++) {
+		ghost_eyes[i].pause();
 	}
 	player->pause();
 }
@@ -1280,7 +1388,7 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts, vector<Ojos_Fant
 	}
 
 	if (dead) {
-		pauseAll(ghosts, player);
+		pauseAll(ghosts, player, ghost_eyes);
 		player->death_start();
 	}
 	else if (eaten) {
@@ -1322,7 +1430,7 @@ int main()
     int ticks = 0, death_ticks = 0;
     bool began = false;
 
-    string level_name = "nivel_1";
+    string level_name = "nivel_3";
 
 	// Inicializacion de ventana
     sf::RenderWindow window(sf::VideoMode(1280, 720), "PACMAN PRO");
@@ -1358,25 +1466,32 @@ int main()
     obj_mapa.load_ghosts(ghosts, &ghosts_texture);
 
     // Posicion de dibujado
-    int draw_xoff = 320;
-    int draw_yoff = 40;
+    int draw_xoff;
+    int draw_yoff;
+
+    draw_xoff = (window.getSize().x - (obj_mapa.get_tam_x()*32)) / 2;
+    draw_yoff = (window.getSize().y - (obj_mapa.get_tam_y()*32)) / 2;
 
     setDrawOffset(&player, ghosts, &obj_mapa, draw_xoff, draw_yoff);
 
     sf::Font font;
     font.loadFromFile("assets/fonts/emulogic.ttf");
 
+    // Texto SCORE
     sf::Text text_score("", font, 16);
-    text_score.setPosition(sf::Vector2f(320, 16));
+    text_score.setPosition(sf::Vector2f(draw_xoff + 16, draw_yoff - 32));
 
     // Texto "Ready!"
     sf::Text text_ready("Ready!", font, 16);
     text_ready.setFillColor(sf::Color::Yellow);
     text_ready.setOrigin(sf::Vector2f(text_ready.getLocalBounds().width / 2, 0));
-    text_ready.setPosition(sf::Vector2f(window.getSize().x / 2 + 16, 16));
+    text_ready.setPosition(sf::Vector2f(window.getSize().x / 2, 16));
 
     int gameover_ticks = 0;
     bool gameover = false;
+
+    int won_ticks = 0;
+    bool won = false;
 
     while (window.isOpen())
     {
@@ -1433,7 +1548,7 @@ int main()
 							for (unsigned int i = 0; i < ghosts.size(); i++) {
 								ghosts[i].reset();
 							}
-							player.reset(false);
+							player.reset(0);
 							player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
 						}
 
@@ -1454,13 +1569,14 @@ int main()
 
         	if (gameover_ticks >= 270) {
 				ghosts.clear();
+				ghost_eyes.clear();
 
 				obj_mapa.load_level(level_name);
 				obj_mapa.load_ghosts(ghosts, &ghosts_texture);
 
 				player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
 
-				player.reset(true);
+				player.reset(1);
 				player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
 
 				setDrawOffset(&player, ghosts, &obj_mapa, draw_xoff, draw_yoff);
@@ -1481,6 +1597,34 @@ int main()
         player.dibujar();
         player.dibujar_vidas();
         player.mover();
+
+        // Ganar nivel
+        if (player.get_bolitas() >= obj_mapa.get_bolas_totales() && !won) {
+            pauseAll(ghosts, &player, ghost_eyes);
+            won = true;
+        }
+
+        if (won) {
+            won_ticks++;
+            if (won_ticks >= 240) {
+                won = false;
+                ghosts.clear();
+				ghost_eyes.clear();
+
+				obj_mapa.load_level(level_name);
+				obj_mapa.load_ghosts(ghosts, &ghosts_texture);
+
+				player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
+
+				player.reset(2);
+				player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
+
+				setDrawOffset(&player, ghosts, &obj_mapa, draw_xoff, draw_yoff);
+
+				began = false;
+                ticks = 0;
+            }
+        }
 
         // Efecto bolita especial
         if (player.ate_special) {
@@ -1527,6 +1671,9 @@ int main()
             player.start();
             for (unsigned int i = 0; i < ghosts.size(); i++) {
 				ghosts[i].start();
+            }
+            for (unsigned int i = 0; i < ghost_eyes.size(); i++) {
+				ghost_eyes[i].start();
             }
             began = true;
         }
