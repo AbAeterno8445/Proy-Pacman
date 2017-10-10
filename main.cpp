@@ -9,8 +9,14 @@ using namespace std;
 
 #define random(A,B) (A + (rand() % (int)(B-A+1)))
 
+/** CONSTANTES **/
+
+// 40, 48, 88, 145
+
+int lista_objetos[] = { 88 };
+
 inline bool es_pared(int tipo, bool bloque_paso) {
-    if (tipo == 11 || tipo == 19 || tipo == 27 || tipo == 28 || tipo == 29 || (!bloque_paso && tipo == 18)) {
+    if (tipo == 11 || tipo == 19 || tipo == 27 || tipo == 28 || tipo == 29 || (!bloque_paso && tipo == 18) || tipo >= 40) {
         return false;
     }
     return true;
@@ -286,6 +292,11 @@ class Pacman: public Dibujable {
 			ate_special = true;
 			bolitas++;
 			break;
+
+        case 88: // red bull
+            speed *= 2;
+            (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
+            break;
     	}
 
     	// Traspasar el mapa
@@ -346,7 +357,7 @@ public:
         mapa_y = 1;
 
         direction = 0;
-        speed = 1.7;
+        speed = 2;
 
         anim_frames = 4;
 
@@ -362,7 +373,7 @@ public:
 		sprite_id = 2;
 		direction = 0;
 		move_queue = 0;
-		speed = 1.7;
+		speed = 2;
 		ghosts_eaten = 0;
 
 		switch(reset_mode) {
@@ -429,7 +440,7 @@ public:
     int get_ghosts_eaten() { return ghosts_eaten; }
 
     void ghost_eaten() {
-		ghosts_eaten++;
+        if (ghosts_eaten < 4) ghosts_eaten++;
 		score_player += 100 * pow(2, ghosts_eaten);
     }
 
@@ -899,12 +910,17 @@ class Mapa {
 	sf::Texture textura_mapa;
 	sf::Sprite sprite_paredes;
 
+	sf::Texture textura_objetos;
+	sf::Sprite sprite_objetos;
+
 	sf::RenderWindow* window;
 
 	vector<int> bol_especiales;
 	int bol_anim;
 
 	int bolas_totales;
+
+	vector<int> objetos;
 
 	bool level_loaded;
 
@@ -933,6 +949,10 @@ public:
 		textura_mapa.loadFromFile("assets/walls.png");
 		sprite_paredes.setTexture(textura_mapa);
 
+		textura_objetos.loadFromFile("assets/items_t.png");
+		sprite_objetos.setTexture(textura_objetos);
+		sprite_objetos.setScale(0.4f, 0.4f);
+
 		pac_spawn_x = 1;
 		pac_spawn_y = 1;
 
@@ -953,6 +973,24 @@ public:
 	int get_drawyoff() { return draw_yoff; }
 
 	sf::RenderWindow* get_windowpt() { return window; }
+
+	// Crear objeto en spawners de objetos
+	void createItem(int pos = 0) {
+        for(int i = 0; i < tam_x; i++) {
+            for(int j = 0; j < tam_y; j++) {
+                if (mapa_pos[i + j * tam_x] == 19 && find(objetos.begin(), objetos.end(), pos) == objetos.end()) {
+                    pos = i + j * tam_x;
+                    break;
+                }
+            }
+        }
+
+        //if (pos == 0) return;
+
+        objetos.push_back(pos);
+
+        mapa_pos[pos] = lista_objetos[random(0, sizeof(lista_objetos) / sizeof(lista_objetos[0]) - 1)];
+	}
 
 	// Crear fantasma en posicion x, y
 	// 0 -> Rojo / 1 -> Rosa / 2 -> Azul / 3 -> Naranja
@@ -1090,8 +1128,30 @@ public:
 
 		for (int i = 0; i < tam_x; i++) {
 			for (int j = 0; j < tam_y; j++) {
+                if (mapa_pos[i + j * tam_x] == 19)
+                    continue;
+
 				dibujar_pared(i, j, mapa_pos[i + j * tam_x]);
 			}
+		}
+
+		for (unsigned int i = 0; i < objetos.size(); i++) {
+
+            if (mapa_pos[objetos[i]] == 19) {
+                objetos.erase(objetos.begin() + i);
+                i--;
+                continue;
+            }
+
+            int spr_x = draw_xoff + (objetos[i] % tam_x) * 32;
+            int spr_y = draw_yoff + ((objetos[i] - objetos[i] % tam_x) / tam_x) * 32;
+
+            int spr_id = mapa_pos[objetos[i]] - 40;
+
+            sprite_objetos.setPosition(spr_x, spr_y);
+            sprite_objetos.setTextureRect(sf::IntRect((spr_id % 8) * 80, floor(spr_id / 8) * 80, 80, 80));
+
+            window->draw(sprite_objetos);
 		}
 
 		if (bol_anim++ == 3) {
@@ -1430,7 +1490,7 @@ int main()
     int ticks = 0, death_ticks = 0;
     bool began = false;
 
-    string level_name = "nivel_3";
+    string level_name = "nivel_1";
 
 	// Inicializacion de ventana
     sf::RenderWindow window(sf::VideoMode(1280, 720), "PACMAN PRO");
@@ -1517,6 +1577,10 @@ int main()
 
                 case sf::Keyboard::D:
                     player.rotar(0);
+                    break;
+
+                case sf::Keyboard::X:
+                    obj_mapa.createItem();
                     break;
 
 				case sf::Keyboard::Escape:
