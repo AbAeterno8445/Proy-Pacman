@@ -51,7 +51,6 @@ protected:
     int sprite_columns;
 
     int direction;
-    float speed;
 
     int move_queue;
 
@@ -73,6 +72,10 @@ protected:
 public:
 
 	vector<int>* mapa_matriz;
+
+	// Velocidad
+    float speed;
+    float old_speed;
 
     //Constructor
     Dibujable(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) {
@@ -261,7 +264,7 @@ public:
 
     int get_direction() { return direction; }
 
-    void start() { moving = true; }
+    void start() { moving = true; reach_block(); }
     void pause() { moving = false; }
 };
 
@@ -294,9 +297,27 @@ class Pacman: public Dibujable {
 			break;
 
         case 88: // red bull
+            old_speed = speed;
             speed *= 2;
+            id_objeto = 88;
+            obj_grabbed = true;
+            (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
+
+            break;
+        case 40:
+            score_player += 1500;
             (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
             break;
+        case 48:
+            if (lives == 3) {
+                score_player += 3000;
+            } else {
+                score_player += 1500;
+                lives++;
+            }
+            (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
+            break;
+
     	}
 
     	// Traspasar el mapa
@@ -334,6 +355,10 @@ public:
 
     // Muerto
     bool dead;
+
+    // Objetos
+	int id_objeto;
+	bool obj_grabbed = false;
 
     Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
 
@@ -373,7 +398,6 @@ public:
 		sprite_id = 2;
 		direction = 0;
 		move_queue = 0;
-		speed = 2;
 		ghosts_eaten = 0;
 
 		switch(reset_mode) {
@@ -1539,13 +1563,13 @@ int main()
 
     // Texto SCORE
     sf::Text text_score("", font, 16);
-    text_score.setPosition(sf::Vector2f(draw_xoff + 16, draw_yoff - 32));
+    text_score.setPosition(sf::Vector2f(980 , 27));
 
     // Texto "Ready!"
     sf::Text text_ready("Ready!", font, 16);
     text_ready.setFillColor(sf::Color::Yellow);
     text_ready.setOrigin(sf::Vector2f(text_ready.getLocalBounds().width / 2, 0));
-    text_ready.setPosition(sf::Vector2f(window.getSize().x / 2, 16));
+    text_ready.setPosition(sf::Vector2f(1050 , 50));
 
     int gameover_ticks = 0;
     bool gameover = false;
@@ -1672,6 +1696,7 @@ int main()
             won_ticks++;
             if (won_ticks >= 240) {
                 won = false;
+                won_ticks = 0;
                 ghosts.clear();
 				ghost_eyes.clear();
 
@@ -1697,6 +1722,17 @@ int main()
 			for (unsigned int i = 0; i < ghosts.size(); i++) {
 				ghosts[i].toggle_slowmode();
 			}
+        }
+
+        // Objeto agarrado
+
+        if (player.obj_grabbed) {
+            player.obj_grabbed = false;
+            if (player.id_objeto == 88) {
+                if (ticks == 400) {
+                    player.speed /= 2;
+                }
+            }
         }
 
         // Procesar fantasmas
