@@ -13,7 +13,9 @@ using namespace std;
 
 // 40, 48, 88, 145
 
-int lista_objetos[] = { 40, 48, 88, 145 };
+int lista_objetos[] = { 40, 48, 88, 127, 145 };
+
+string lista_niveles[] { "nivel_1", "nivel_2", "nivel_3", "nivel_4",  "nivel_5" };
 
 inline bool es_pared(int tipo, bool bloque_paso) {
     if (tipo == 11 || tipo == 19 || tipo == 27 || tipo == 28 || tipo == 29 || (!bloque_paso && tipo == 18) || tipo >= 40) {
@@ -102,6 +104,9 @@ public:
 
     // Necesario para utilizar punteros a objetos heredados de esta clase
     virtual ~Dibujable() {}
+
+    float get_speed() { return speed; }
+    void set_speed(float newspeed) { speed = newspeed; }
 
     void set_mapsize(int xsize, int ysize) {
 		tam_x = xsize;
@@ -391,19 +396,21 @@ class Pacman: public Dibujable {
         int dur = 0;
         int tipo = 0;
 
+        (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
+
         switch(item_id) {
-        case 88: // red bull
+        case 88: // Red Bull
             tipo = 1;
             speed += 1.5;
             dur = 7000;
             score_player += 500;
             break;
 
-        case 40:
+        case 40: // Cherry
             score_player += 1500;
             break;
 
-        case 48:
+        case 48: // Cherry de oro
             if (lives == 3) {
                 score_player += 3000;
             } else {
@@ -412,7 +419,7 @@ class Pacman: public Dibujable {
             }
             break;
 
-        case 145:
+        case 145: // Botas de Hermes
             tipo = 2;
             speed += 0.5;
             score_player += 500;
@@ -438,8 +445,6 @@ class Pacman: public Dibujable {
                 objetos.push_back(obj_temp);
             }
         }
-
-        (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
     }
 
     void undo_item(int item_id) {
@@ -1284,6 +1289,9 @@ public:
                 }
             }
 
+            draw_xoff = (window->getSize().x - (tam_x * 32)) / 2;
+            draw_yoff = (window->getSize().y - (tam_y * 32)) / 2;
+
             level_loaded = true;
             cout << "Bolas tot:" << bolas_totales << endl;
 
@@ -1297,7 +1305,7 @@ public:
 			for (int j = 0; j < tam_y; j++) {
 				switch(mapa_pos[i + j * tam_x]) {
 				case 31: // Rojo
-					createGhost(ghosts, ghost_texture, 0, i, j, 1, false);
+					createGhost(ghosts, ghost_texture, 0, i, j, 0, false);
 					mapa_pos[i + j * tam_x] = 11;
 					break;
 
@@ -1585,11 +1593,10 @@ public:
 /** FUNCIONES **/
 
 void setDrawOffset(Pacman* pacman, vector<Fantasmita>& ghosts, Mapa* mapa, int xoff, int yoff) {
-    pacman->set_drawoffset(xoff, yoff);
-    mapa->set_drawoffset(xoff, yoff);
+    pacman->set_drawoffset(mapa->get_drawxoff(), mapa->get_drawyoff());
 
     for (unsigned int i = 0; i < ghosts.size(); i++) {
-		ghosts[i].set_drawoffset(xoff, yoff);
+		ghosts[i].set_drawoffset(mapa->get_drawxoff(), mapa->get_drawyoff());
     }
 };
 
@@ -1664,7 +1671,7 @@ int main()
     int ticks = 0, death_ticks = 0;
     bool began = false;
 
-    string level_name = "nivel_1";
+    int id_nivel = 0;
 
     sf::Font font;
     font.loadFromFile("assets/fonts/emulogic.ttf");
@@ -1675,7 +1682,7 @@ int main()
 
     // Mapa
     Mapa obj_mapa(&window);
-    obj_mapa.load_level(level_name);
+    obj_mapa.load_level(lista_niveles[id_nivel]);
 
     // Textura del jugador
     sf::Texture charset_texture;
@@ -1753,9 +1760,17 @@ int main()
                     player.rotar(0);
                     break;
 
-                case sf::Keyboard::X:
+                /*
+                case sf::Keyboard::X: // Debug - Crear objeto
                     obj_mapa.createItem();
                     break;
+
+
+                case sf::Keyboard::Q: // Debug - Ganar nivel instantaneamente
+                    won = true;
+                    pauseAll(ghosts, &player, ghost_eyes);
+                    break;
+                */
 
 				case sf::Keyboard::Escape:
 					window.close();
@@ -1763,7 +1778,6 @@ int main()
 
                 default: break;
                 }
-
         }
 
         window.clear();
@@ -1808,8 +1822,9 @@ int main()
         	if (gameover_ticks >= 270) {
 				ghosts.clear();
 				ghost_eyes.clear();
+				id_nivel = 0;
 
-				obj_mapa.load_level(level_name);
+				obj_mapa.load_level(lista_niveles[id_nivel]);
 				obj_mapa.load_ghosts(ghosts, &ghosts_texture);
 
 				player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
@@ -1852,8 +1867,13 @@ int main()
                 won_ticks = 0;
                 ghosts.clear();
 				ghost_eyes.clear();
+				id_nivel++;
 
-				obj_mapa.load_level(level_name);
+				if ((unsigned)id_nivel > sizeof(lista_niveles) / sizeof(lista_niveles[0]) - 1) {
+                    id_nivel = 0;
+				}
+
+				obj_mapa.load_level(lista_niveles[id_nivel]);
 				obj_mapa.load_ghosts(ghosts, &ghosts_texture);
 
 				player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
