@@ -265,7 +265,7 @@ public:
 
     int get_direction() { return direction; }
 
-    void start() { moving = true; }
+    void start() { moving = true; reach_block(); }
     virtual void pause() { moving = false; }
 };
 
@@ -423,9 +423,11 @@ class Pacman: public Dibujable {
             bool add = true;
 
             if (tipo == 2) {
-                if (find(objetos.begin(), objetos.end(), item_id) != objetos.end()) {
-                    find(objetos.begin(), objetos.end(), item_id).cantidad++;
-                    add = false;
+                for(unsigned int i = 0; i < objetos.size(); i++) {
+                    if (objetos[i].obj_id == item_id) {
+                        objetos[i].cantidad++;
+                        add = false;
+                    }
                 }
             }
 
@@ -477,6 +479,7 @@ public:
 
     	font = font_p;
     	item_amt_text.setFont(*font);
+    	item_amt_text.setCharacterSize(10);
 
     	dead = false;
 
@@ -526,6 +529,8 @@ public:
 		}
 
 		for(int i = 0; i < (int)objetos.size(); i++) {
+            if (objetos[i].tipo_uso == 2) continue;
+
             undo_item(objetos[i].obj_id);
 
             objetos.erase(objetos.begin() + i);
@@ -610,8 +615,8 @@ public:
                 }
             } else {
                 if (objetos[i].cantidad > 1) {
-                    item_amt_text.setPosition(dx + 32, dy + 24);
-                    item_amt_text.setString("x" + objetos[i].cantidad);
+                    item_amt_text.setPosition(dx + 28, dy + 20);
+                    item_amt_text.setString("x" + to_string(objetos[i].cantidad));
 
                     window->draw(item_amt_text);
                 }
@@ -1101,6 +1106,14 @@ class Mapa {
 
 	sf::RenderWindow* window;
 
+	sf::Clock item_timer;
+	sf::Clock item_durationtimer;
+
+	sf::Time item_spawntime;
+	sf::Time item_duration;
+
+	bool item_spawned;
+
 	vector<int> bol_especiales;
 	int bol_anim;
 
@@ -1138,6 +1151,10 @@ public:
 		textura_objetos.loadFromFile("assets/items_t.png");
 		sprite_objetos.setTexture(textura_objetos);
 		sprite_objetos.setScale(0.4f, 0.4f);
+
+		item_spawned = false;
+		item_spawntime = sf::milliseconds(35000);
+		item_duration = sf::milliseconds(18000);
 
 		pac_spawn_x = 1;
 		pac_spawn_y = 1;
@@ -1451,6 +1468,22 @@ public:
             }
         }
         return built_path;
+	}
+
+	void process_items() {
+	    if (!item_spawned) {
+            if (item_timer.getElapsedTime().asMilliseconds() >= item_spawntime.asMilliseconds()) {
+                item_durationtimer.restart();
+                item_timer.restart();
+                createItem();
+                item_spawned = true;
+            }
+	    } else {
+            if (item_timer.getElapsedTime().asMilliseconds() >= item_duration.asMilliseconds()) {
+                objetos.clear();
+                item_spawned = false;
+            }
+	    }
 	}
 };
 
@@ -1798,6 +1831,8 @@ int main()
         }
 
         if (gameover) continue;
+
+        obj_mapa.process_items();
 
         player.dibujar();
         player.dibujar_vidas();
