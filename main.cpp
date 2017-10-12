@@ -13,7 +13,7 @@ using namespace std;
 
 // 40, 48, 88, 145
 
-int lista_objetos[] = { 88 };
+int lista_objetos[] = { 40, 48, 88, 145 };
 
 inline bool es_pared(int tipo, bool bloque_paso) {
     if (tipo == 11 || tipo == 19 || tipo == 27 || tipo == 28 || tipo == 29 || (!bloque_paso && tipo == 18) || tipo >= 40) {
@@ -52,6 +52,8 @@ protected:
 
     int direction;
 
+    float speed;
+
     int move_queue;
 
     int anim_current;
@@ -72,10 +74,6 @@ protected:
 public:
 
 	vector<int>* mapa_matriz;
-
-	// Velocidad
-    float speed;
-    float old_speed;
 
     //Constructor
     Dibujable(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) {
@@ -259,13 +257,65 @@ public:
     int getposition_x() { return mapa_x; }
     int getposition_y() { return mapa_y; }
 
+    float getdrawposition_x() { return mapa_x * 32 + 16 + move_drawoffx + draw_xoff; }
+    float getdrawposition_y() { return mapa_y * 32 + 16 + move_drawoffy + draw_yoff; }
+
     int get_movedrawxoff() { return move_drawoffx; }
     int get_movedrawyoff() { return move_drawoffy; }
 
     int get_direction() { return direction; }
 
-    void start() { moving = true; reach_block(); }
-    void pause() { moving = false; }
+    void start() { moving = true; }
+    virtual void pause() { moving = false; }
+};
+
+/** OBJETOS **/
+
+struct Objeto {
+    int obj_id;
+
+    // 0 -> obtenible / 1 -> activo / 2 -> pasivo
+    int tipo_uso;
+
+    int cantidad;
+
+    sf::RectangleShape duration_bar;
+
+    Objeto(int id, int duracion_p) {
+        obj_id = id;
+
+        tipo_uso = 0;
+        cantidad = 1;
+
+        duration_bar.setSize(sf::Vector2f(32, 4));
+        duration_bar.setFillColor(sf::Color::Green);
+
+        duracion = sf::milliseconds(duracion_p);
+        clock.restart();
+    }
+
+    bool process() {
+        float perc = clock.getElapsedTime().asSeconds() / duracion.asSeconds();
+        float bar_len = 32.0f - 32.0f * perc;
+
+        if (1 - perc <= 0.25f) {
+            duration_bar.setFillColor(sf::Color::Red);
+        } else if (1 - perc <= 0.5f) {
+            duration_bar.setFillColor(sf::Color::Yellow);
+        }
+
+        duration_bar.setSize(sf::Vector2f(bar_len, 4));
+
+        if (clock.getElapsedTime().asMilliseconds() >= duracion.asMilliseconds()) {
+            return true;
+        }
+
+        return false;
+    }
+
+private:
+    sf::Clock clock;
+    sf::Time duracion;
 };
 
 /** PACMAN **/
@@ -277,8 +327,19 @@ class Pacman: public Dibujable {
 	int lives;
 	sf::Sprite lives_sprite;
 
+	sf::Texture item_texture;
+	sf::Sprite item_sprite;
+
+	sf::Font* font;
+	sf::Text item_amt_text;
+
 	int bolitas;
 
+	bool paused;
+
+	vector<Objeto> objetos;
+
+	// Pacman llega a un bloque
     void reach_block() {
     	switch((*mapa_matriz)[mapa_x + mapa_y * tam_x]) {
 		case 29: // Bolita comun
@@ -295,29 +356,10 @@ class Pacman: public Dibujable {
 			ate_special = true;
 			bolitas++;
 			break;
+    	}
 
-        case 88: // red bull
-            old_speed = speed;
-            speed *= 2;
-            id_objeto = 88;
-            obj_grabbed = true;
-            (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
-
-            break;
-        case 40:
-            score_player += 1500;
-            (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
-            break;
-        case 48:
-            if (lives == 3) {
-                score_player += 3000;
-            } else {
-                score_player += 1500;
-                lives++;
-            }
-            (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
-            break;
-
+    	if ((*mapa_matriz)[mapa_x + mapa_y * tam_x] >= 40) {
+            grab_item((*mapa_matriz)[mapa_x + mapa_y * tam_x]);
     	}
 
     	// Traspasar el mapa
@@ -345,6 +387,67 @@ class Pacman: public Dibujable {
     	}
     }
 
+    void grab_item(int item_id) {
+        int dur = 0;
+        int tipo = 0;
+
+        switch(item_id) {
+        case 88: // red bull
+            tipo = 1;
+            speed += 1.5;
+            dur = 7000;
+            score_player += 500;
+            break;
+
+        case 40:
+            score_player += 1500;
+            break;
+
+        case 48:
+            if (lives == 3) {
+                score_player += 3000;
+            } else {
+                score_player += 1500;
+                lives++;
+            }
+            break;
+
+        case 145:
+            tipo = 2;
+            speed += 0.5;
+            score_player += 500;
+            break;
+        }
+
+        if (tipo != 0) {
+            bool add = true;
+
+            if (tipo == 2) {
+                if (find(objetos.begin(), objetos.end(), item_id) != objetos.end()) {
+                    find(objetos.begin(), objetos.end(), item_id).cantidad++;
+                    add = false;
+                }
+            }
+
+            if (add) {
+                Objeto obj_temp((*mapa_matriz)[mapa_x + mapa_y * tam_x], dur);
+                obj_temp.tipo_uso = tipo;
+
+                objetos.push_back(obj_temp);
+            }
+        }
+
+        (*mapa_matriz)[mapa_x + mapa_y * tam_x] = 19;
+    }
+
+    void undo_item(int item_id) {
+        switch(item_id) {
+        case 88: // Red Bull
+            speed -= 1.5;
+            break;
+        }
+    }
+
 public:
 
     // Puntaje
@@ -356,11 +459,7 @@ public:
     // Muerto
     bool dead;
 
-    // Objetos
-	int id_objeto;
-	bool obj_grabbed = false;
-
-    Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param) : Dibujable(window_param, texture_param, mapa_matriz_param) {
+    Pacman(sf::RenderWindow* window_param, sf::Texture* texture_param, vector<int>* mapa_matriz_param, sf::Font* font_p) : Dibujable(window_param, texture_param, mapa_matriz_param) {
 
     	score_player = 0;
     	ghosts_eaten = 0;
@@ -371,6 +470,13 @@ public:
     	lives_sprite.setTexture(*texture_param);
     	lives_sprite.setScale(2, 2);
     	lives_sprite.setTextureRect(sf::IntRect(0, 0, 16, 16));
+
+    	item_texture.loadFromFile("assets/items_t.png");
+    	item_sprite.setTexture(item_texture);
+    	item_sprite.setScale(0.4f, 0.4f);
+
+    	font = font_p;
+    	item_amt_text.setFont(*font);
 
     	dead = false;
 
@@ -392,6 +498,12 @@ public:
         anim_movement[3] = 1;
 
         moving = false;
+        paused = false;
+    }
+
+    void pause() {
+        moving = false;
+        paused = true;
     }
 
     void reset(int reset_mode) {
@@ -413,7 +525,15 @@ public:
             break;
 		}
 
+		for(int i = 0; i < (int)objetos.size(); i++) {
+            undo_item(objetos[i].obj_id);
+
+            objetos.erase(objetos.begin() + i);
+            i--;
+		}
+
 		moving = false;
+		paused = false;
     }
 
     int get_lives() { return lives; }
@@ -434,7 +554,7 @@ public:
     }
 
     void rotar(int dir) {
-    	if (dead) return;
+    	if (dead || paused) return;
 
         move_queue = dir;
 
@@ -459,6 +579,44 @@ public:
 		}
 
 		return false;
+    }
+
+    // Procesar objetos
+    void process_items() {
+        for(int i = 0; i < (int)objetos.size(); i++) {
+
+            if (objetos[i].tipo_uso == 0) continue;
+
+            int draw_itemid = objetos[i].obj_id - 40;
+
+            item_sprite.setTextureRect(sf::IntRect((draw_itemid % 8) * 80, floor(draw_itemid / 8) * 80, 80, 80));
+
+            int dx = draw_xoff - 64;
+            int dy = draw_yoff + 40 * (lives + 2) + 40 * (i + 1);
+
+            item_sprite.setPosition(dx, dy);
+            objetos[i].duration_bar.setPosition(dx, dy + 30);
+
+            window->draw(item_sprite);
+
+            if (objetos[i].tipo_uso == 1) {
+                window->draw(objetos[i].duration_bar);
+
+                if(objetos[i].process()) {
+                    undo_item(objetos[i].obj_id);
+
+                    objetos.erase(objetos.begin() + i);
+                    i--;
+                }
+            } else {
+                if (objetos[i].cantidad > 1) {
+                    item_amt_text.setPosition(dx + 32, dy + 24);
+                    item_amt_text.setString("x" + objetos[i].cantidad);
+
+                    window->draw(item_amt_text);
+                }
+            }
+        }
     }
 
     int get_ghosts_eaten() { return ghosts_eaten; }
@@ -738,6 +896,10 @@ public:
 		activation_ticks = ticks;
     }
 
+    void consider_passblock() {
+        move_considerpassblock = true;
+    }
+
     void set_ghost_spriteid(int id) {
 		ghost_spriteid = id;
 		sprite_id = id;
@@ -1009,7 +1171,7 @@ public:
             }
         }
 
-        //if (pos == 0) return;
+        if (pos == 0) return;
 
         objetos.push_back(pos);
 
@@ -1024,6 +1186,8 @@ public:
 		ghost_temp.set_ghost_spriteid(tipo * 12);
 
 		ghost_temp.set_activation_ticks(act_ticks);
+
+		if (tipo == 0) ghost_temp.consider_passblock();
 
 		ghost_temp.set_type(tipo);
 
@@ -1041,7 +1205,9 @@ public:
 	// Cargar nivel
 	void load_level(string lvlname) {
 		fstream mapfile;
-		mapfile.open("mapas/" + lvlname + ".txt");
+		string ruta = "mapas/" + lvlname + ".txt";
+
+		mapfile.open(ruta.c_str());
 
 		if (mapfile.is_open()) {
             string sub_line;
@@ -1411,64 +1577,15 @@ void checkCollision(Pacman* player, vector<Fantasmita>& ghosts, vector<Ojos_Fant
 	int eaten_id = 0;
 
 	for (unsigned int i = 0; i < ghosts.size(); i++) {
+        int dist = pow( pow(ghosts[i].getdrawposition_x() - player->getdrawposition_x(), 2) + pow(ghosts[i].getdrawposition_y() - player->getdrawposition_y(), 2) , 0.5);
 
-		if (ghosts[i].getposition_x() == player->getposition_x() && ghosts[i].getposition_y() == player->getposition_y()) {
-			if (!ghosts[i].is_slowed()) dead = true;
-			else {
-				eaten = true;
-				eaten_id = i;
-			}
-		}
-
-		switch(ghosts[i].get_direction()) {
-		case 0: // Fantasma derecha
-			if (player->getposition_x() - 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawxoff()) + abs(ghosts[i].get_movedrawxoff())) >= 10) {
-					if (!ghosts[i].is_slowed()) dead = true;
-					else {
-						eaten = true;
-						eaten_id = i;
-					}
-				}
-			}
-			break;
-
-		case 1: // Fantasma abajo
-			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() - 1 == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawyoff()) + abs(ghosts[i].get_movedrawyoff())) >= 10) {
-					if (!ghosts[i].is_slowed()) dead = true;
-					else {
-						eaten = true;
-						eaten_id = i;
-					}
-				}
-			}
-			break;
-
-		case 2: // Fantasma izquierda
-			if (player->getposition_x() + 1 == ghosts[i].getposition_x() && player->getposition_y() == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawxoff()) + abs(ghosts[i].get_movedrawxoff())) >= 10) {
-					if (!ghosts[i].is_slowed()) dead = true;
-					else {
-						eaten = true;
-						eaten_id = i;
-					}
-				}
-			}
-			break;
-
-		case 3: // Fantasma arriba
-			if (player->getposition_x() == ghosts[i].getposition_x() && player->getposition_y() + 1 == ghosts[i].getposition_y()) {
-				if (abs(abs(player->get_movedrawyoff()) + abs(ghosts[i].get_movedrawyoff())) >= 10) {
-					if (!ghosts[i].is_slowed()) dead = true;
-					else {
-						eaten = true;
-						eaten_id = i;
-					}
-				}
-			}
-			break;
-		}
+        if (dist <= 16) {
+            if (!ghosts[i].is_slowed()) dead = true;
+            else {
+                eaten = true;
+                eaten_id = i;
+            }
+        }
 	}
 
 	if (dead) {
@@ -1516,6 +1633,9 @@ int main()
 
     string level_name = "nivel_1";
 
+    sf::Font font;
+    font.loadFromFile("assets/fonts/emulogic.ttf");
+
 	// Inicializacion de ventana
     sf::RenderWindow window(sf::VideoMode(1280, 720), "PACMAN PRO");
     window.setFramerateLimit(60);
@@ -1533,7 +1653,7 @@ int main()
     ghosts_texture.loadFromFile("assets/charset_fantasmas.png");
 
     // Objeto pacman (jugador)
-    Pacman player(&window, &charset_texture, &obj_mapa.mapa_pos);
+    Pacman player(&window, &charset_texture, &obj_mapa.mapa_pos, &font);
     player.setposition(obj_mapa.pac_spawn_x, obj_mapa.pac_spawn_y);
     player.set_mapsize(obj_mapa.get_tam_x(), obj_mapa.get_tam_y());
 
@@ -1557,9 +1677,6 @@ int main()
     draw_yoff = (window.getSize().y - (obj_mapa.get_tam_y()*32)) / 2;
 
     setDrawOffset(&player, ghosts, &obj_mapa, draw_xoff, draw_yoff);
-
-    sf::Font font;
-    font.loadFromFile("assets/fonts/emulogic.ttf");
 
     // Texto SCORE
     sf::Text text_score("", font, 16);
@@ -1685,6 +1802,7 @@ int main()
         player.dibujar();
         player.dibujar_vidas();
         player.mover();
+        player.process_items();
 
         // Ganar nivel
         if (player.get_bolitas() >= obj_mapa.get_bolas_totales() && !won) {
@@ -1722,17 +1840,6 @@ int main()
 			for (unsigned int i = 0; i < ghosts.size(); i++) {
 				ghosts[i].toggle_slowmode();
 			}
-        }
-
-        // Objeto agarrado
-
-        if (player.obj_grabbed) {
-            player.obj_grabbed = false;
-            if (player.id_objeto == 88) {
-                if (ticks == 400) {
-                    player.speed /= 2;
-                }
-            }
         }
 
         // Procesar fantasmas
